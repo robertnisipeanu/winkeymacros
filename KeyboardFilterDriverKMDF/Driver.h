@@ -1,0 +1,47 @@
+#pragma once
+
+#include <ntddk.h>
+#include <ntverp.h>
+#pragma warning(disable:4201)
+
+#include "ntddk.h"
+#include "kbdmou.h"
+#include <ntddkbd.h>
+
+#pragma warning(default:4201)
+
+#include <wdf.h>
+
+#define NTRSTRSAFE_LIB
+#include <ntstrsafe.h>
+
+#include <initguid.h>
+#include <devguid.h>
+
+typedef struct _DEVICE_EXTENSION
+{
+	WDFDEVICE Wdfdevice;
+
+	//
+	// The real connect data that this driver reports to
+	//
+	CONNECT_DATA UpperConnectData;
+
+	//
+	// Cached Keyboard Attributes
+	//
+	KEYBOARD_ATTRIBUTES KeyboardAttributes;
+
+} DEVICE_EXTENSION, *PDEVICE_EXTENSION;
+
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_EXTENSION, FilterGetData)
+
+
+DRIVER_INITIALIZE DriverEntry;
+EVT_WDF_DRIVER_DEVICE_ADD KeyboardFilter_EvtDeviceAdd;
+
+EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL KeyboardFilter_EvtIoInternalDeviceControl;
+EVT_WDF_REQUEST_COMPLETION_ROUTINE KeyboardFilterRequestCompletionRoutine;
+
+VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD_INPUT_DATA InputDataStart,
+	IN PKEYBOARD_INPUT_DATA InputDataEnd, IN OUT PULONG InputDataConsumed);
