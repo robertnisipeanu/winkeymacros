@@ -7,7 +7,6 @@ namespace ConsoleTest
 {
     class Program
     {
-        static KeyboardEvents.Debug _debug;
 
         static async Task Main(string[] args)
         {

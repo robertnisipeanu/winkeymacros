@@ -17,6 +17,9 @@
 
 #include <initguid.h>
 #include <devguid.h>
+#include "shared.h"
+
+extern WDFDEVICE ControlDevice;
 
 typedef struct _DEVICE_EXTENSION
 {
@@ -34,7 +37,12 @@ typedef struct _DEVICE_EXTENSION
 
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
 
+typedef struct _INVERTED_DEVICE_CONTEXT {
+	WDFQUEUE NotificationQueue;
+} INVERTED_DEVICE_CONTEXT, *PINVERTED_DEVICE_CONTEXT;
+
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_EXTENSION, FilterGetData)
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(INVERTED_DEVICE_CONTEXT, InvertedGetContextFromDevice)
 
 
 DRIVER_INITIALIZE DriverEntry;
@@ -45,3 +53,8 @@ EVT_WDF_REQUEST_COMPLETION_ROUTINE KeyboardFilterRequestCompletionRoutine;
 
 VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD_INPUT_DATA InputDataStart,
 	IN PKEYBOARD_INPUT_DATA InputDataEnd, IN OUT PULONG InputDataConsumed);
+
+NTSTATUS UserCommunication_RegisterControlDevice(WDFDRIVER WdfDriver);
+
+EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL UserCommunication_EvtIoDeviceControl;
+EVT_WDF_DEVICE_SHUTDOWN_NOTIFICATION UserCommunication_EvtWdfDeviceShutdownNotification;

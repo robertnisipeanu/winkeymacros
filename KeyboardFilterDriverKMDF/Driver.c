@@ -3,6 +3,7 @@
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath) {
 	WDF_DRIVER_CONFIG config;
 	NTSTATUS status;
+	WDFDRIVER WdfDriver;
 
 	KdPrint(("[KB] Loading driver...\n"));
 
@@ -21,13 +22,21 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 	//
 	// Create a framework driver object to represent our driver
 	//
-	status = WdfDriverCreate(DriverObject, RegistryPath, WDF_NO_OBJECT_ATTRIBUTES, &config, WDF_NO_HANDLE);
+	status = WdfDriverCreate(DriverObject, RegistryPath, WDF_NO_OBJECT_ATTRIBUTES, &config, &WdfDriver);
 	if (!NT_SUCCESS(status)) {
 		KdPrint(("[KB] WdfDriverCreate failed with status 0x%x\n", status));
+		return status;
 	}
-	else {
-		KdPrint(("[KB] Driver loaded\n"));
+
+	KdPrint(("[KB] DriverObject created\n"));
+
+	status = UserCommunication_RegisterControlDevice(WdfDriver);
+	if (!NT_SUCCESS(status)) {
+		KdPrint(("[KB] RegisterControlDevice failed with status 0x%x\n", status));
+		return status;
 	}
+
+	//status = WdfDeviceCreate();
 
 	return status;
 }
@@ -312,27 +321,130 @@ Return Value:
 
 --*/
 VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD_INPUT_DATA InputDataStart, IN PKEYBOARD_INPUT_DATA InputDataEnd, IN OUT PULONG InputDataConsumed) {
+
 	PDEVICE_EXTENSION devExt;
 	WDFDEVICE hDevice;
+
+	PINVERTED_DEVICE_CONTEXT InvertedDeviceContext;
+	//NTSTATUS QueueReturnStatus;
+	//ULONG_PTR info;
+	//LONG valueToReturn;
+	//WDFREQUEST notifyRequest;
+	//PULONG  bufferPointer;
 
 	hDevice = WdfWdmDeviceGetWdfDeviceHandle(DeviceObject);
 	devExt = FilterGetData(hDevice);
 
+	// ControlDevice not yet initialized, process keyboard input normally
+	if (ControlDevice == NULL) {
+		KdPrint(("[KB] No ControlDevice found, passing packets normally\n"));
+		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
+		(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
+		return;
+	}
+	InvertedDeviceContext = InvertedGetContextFromDevice(ControlDevice);
+
 	KdPrint(("[KB] Input from device: %u; %u\n", devExt->KeyboardAttributes.KeyboardIdentifier.Type, devExt->KeyboardAttributes.KeyboardIdentifier.Subtype));
 
-	PKEYBOARD_INPUT_DATA pCur = InputDataStart;
+	/*PKEYBOARD_INPUT_DATA pCur = InputDataStart;
 
 	while (pCur < InputDataEnd) {
 		ULONG consumed = 0;
 
+
+
 		KdPrint(("[KB] Scan code %x\n", pCur->MakeCode));
+		if (pCur->MakeCode == 0x1f) {
+			KdPrint(("[KB] Replacing scancode\n"));
+			pCur->MakeCode = 0x00;
+		}
 
 		(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, pCur, pCur+1, &consumed);
 		pCur++;
+	}*/
+
+	// Notify START
+
+	/*NTSTATUS queueAvailable = WdfIoQueueRetrieveNextRequest(InvertedDeviceContext->NotificationQueue, &notifyRequest);
+
+	// No queue available, process keyboard input normally
+	if (!NT_SUCCESS(queueAvailable)) {
+		KdPrint(("[KB] No queue available, passing packets normally"));
+		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
+		(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
+		return;
+	}
+
+	//
+	// Get a pointer to the output buffer that was passed-in with the user
+	// notification IOCTL. We'll use this to return additional info about
+	// the event.
+	//
+	queueAvailable = WdfRequestRetrieveOutputBuffer(notifyRequest, sizeof(LONG), (PVOID*)&bufferPointer, nullptr);
+	if (!NT_SUCCESS(queueAvailable)) {
+		// Should never get here
+		QueueReturnStatus = STATUS_SUCCESS;
+		info = 0;
+
+		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
+		(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
+
+		WdfRequestCompleteWithInformation(notifyRequest, QueueReturnStatus, info);
+	}
+	else {
+		valueToReturn = 1;
+		*bufferPointer = valueToReturn;
+
+		QueueReturnStatus = STATUS_SUCCESS;
+		info = sizeof(LONG);
+
+		ULONG total = 0, temp = 0;
+		KEYBOARD_INPUT_DATA *pCur;
+
+		for (pCur = InputDataStart; pCur < InputDataEnd; pCur++) {
+			total++;
+			(*(PSERVICE_CALLBACK_ROUTINE)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, pCur, pCur + 1, &temp);
+			total += temp;
+		}
+
+		*InputDataConsumed = total;
+
+		KdPrint(("[KB] Dropped %u packets\n", total));
+
+		WdfRequestCompleteWithInformation(notifyRequest, QueueReturnStatus, info);
+	}*/
+
+	//ULONG total = 0;
+	KEYBOARD_INPUT_DATA *pCur;
+	ULONG total = 0;
+
+	for (pCur = InputDataStart; pCur < InputDataEnd; pCur++) {
+		ULONG consumed = 0;
+
+		if (pCur->MakeCode == 0x1f) {
+			consumed += 1;
+			KdPrint(("[KB] S pressed, consumed currvalue: %u\n", consumed));
+		}
+		else {
+			(*(PSERVICE_CALLBACK_ROUTINE)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, pCur, pCur + 1, &consumed);
+		}
+
+		//ULONG temp = 0;
+		total += consumed;
+
+		//RtlCopyMemory(data, pCur, sizeof(KEYBOARD_INPUT_DATA));
+		//total++;
+		//(*(PSERVICE_CALLBACK_ROUTINE)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, data, data + 1, &temp);
+		//total += temp;
 	}
 
 	*InputDataConsumed = (ULONG) (InputDataEnd - InputDataStart);
-	//(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
+
+	//*InputDataConsumed = total;
+
+	//(*(PSERVICE_CALLBACK_ROUTINE)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
+
+	// Notify END
 }
 
 
@@ -378,3 +490,4 @@ VOID KeyboardFilterRequestCompletionRoutine(WDFREQUEST Request, WDFIOTARGET Targ
 
 	return;
 }
+
