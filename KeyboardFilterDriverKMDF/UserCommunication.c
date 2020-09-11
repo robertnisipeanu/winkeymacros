@@ -207,7 +207,7 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 				// like it would come from the keyboard itself
 				//
 				ULONG consumed = 0;
-				PDEVICE_EXTENSION deviceToPressOnExt = FilterGetData(deviceToPressOn);
+				PDEVICE_EXTENSION deviceToPressOnExt = GetContextFromDevice(deviceToPressOn);
 				PKEYBOARD_INPUT_DATA nativeKeys;
 				WDFMEMORY nativeKeysMemory;
 

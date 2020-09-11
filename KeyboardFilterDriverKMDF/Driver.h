@@ -1,3 +1,10 @@
+/**
+* File name: Driver.h
+* Project name: Multi-Keyboard macros
+* Author: Robert Gabriel Nisipeanu
+* Author's Github Profile: https://github.com/robertnisipeanu
+*/
+
 #pragma once
 
 #include <ntddk.h>
@@ -47,7 +54,7 @@ typedef struct _INVERTED_DEVICE_CONTEXT {
 	WDFQUEUE NotificationQueue;
 } INVERTED_DEVICE_CONTEXT, *PINVERTED_DEVICE_CONTEXT;
 
-WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_EXTENSION, FilterGetData)
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_EXTENSION, GetContextFromDevice)
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(INVERTED_DEVICE_CONTEXT, InvertedGetContextFromDevice)
 
 

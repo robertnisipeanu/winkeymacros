@@ -105,7 +105,7 @@ NTSTATUS KeyboardFilter_EvtDeviceAdd(IN WDFDRIVER Driver, IN PWDFDEVICE_INIT Dev
 	}
 
 	PDEVICE_EXTENSION filterExt;
-	filterExt = FilterGetData(hDevice);
+	filterExt = GetContextFromDevice(hDevice);
 
 	//
 	// Configure the default queue to be Parallel. Do not use sequential queue
@@ -156,7 +156,7 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 	WDF_REQUEST_SEND_OPTIONS options;
 
 	hDevice = WdfIoQueueGetDevice(Queue);
-	devExt = FilterGetData(hDevice);
+	devExt = GetContextFromDevice(hDevice);
 
 	switch (IoControlCode) {
 
@@ -343,7 +343,7 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 	PVOID  bufferPointer;
 
 	WdfDevice = WdfWdmDeviceGetWdfDeviceHandle(DeviceObject);
-	devExt = FilterGetData(WdfDevice);
+	devExt = GetContextFromDevice(WdfDevice);
 
 	//
 	// ControlDevice not yet initialized, process keyboard input normally
@@ -502,6 +502,7 @@ VOID KeyboardFilterRequestCompletionRoutine(WDFREQUEST Request, WDFIOTARGET Targ
 	return;
 }
 
+///
 WDFDEVICE KBFLTR_GetDeviceByCustomID(WDFDRIVER WdfDriver, DWORD DeviceID) {
 
 	PDRIVER_OBJECT WdmDriver = WdfDriverWdmGetDriverObject(WdfDriver);
@@ -514,22 +515,20 @@ WDFDEVICE KBFLTR_GetDeviceByCustomID(WDFDRIVER WdfDriver, DWORD DeviceID) {
 	while (currDevice != NULL) {
 
 		//
-		// Get WdfDevice associated with the PDEVICE_OBJECT of current device
+		// Get WdfDevice and the device extension associated 
+		// with the PDEVICE_OBJECT of current device
 		//
 		WDFDEVICE WdfDevice = WdfWdmDeviceGetWdfDeviceHandle(currDevice);
+		PDEVICE_EXTENSION devExt = GetContextFromDevice(WdfDevice);
 
 		//
-		// Verify by AttachedDevice because currDevice will return DeviceType as FILE_DEVICE_KEYBOARD
-		// only for USB Keyboards and will return FILE_DEVICE_8042_PORT for a PS/2 Keyboard. 
-		// Tested AttachedDevice->DeviceType and it returns FILE_DEVICE_KEYBOARD
+		// If devExt is NULL it means the device has a different type
+		// of device context (in this case, it means that it would be
+		// our DeviceControl as it's context type is INVERTED_DEVICE_CONTEXT).
+		// We want to loop just through keyboards with context type
+		// of DEVICE_EXTENSION
 		//
-		if (currDevice->AttachedDevice != NULL && currDevice->AttachedDevice->DeviceType == FILE_DEVICE_KEYBOARD) {
-			PDEVICE_EXTENSION devExt = FilterGetData(WdfDevice);
-
-			//
-			// If we found the right device or DeviceID is 0 (0 means the first device, doesn't matter which; a device can't have ID 0 as we start with 1)
-			// then return it
-			//
+		if (devExt != NULL) {
 			if (devExt->DeviceID == DeviceID || DeviceID == 0) return WdfDevice;
 		}
 
