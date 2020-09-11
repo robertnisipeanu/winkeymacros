@@ -19,11 +19,17 @@
 #include <devguid.h>
 #include "shared.h"
 
+extern DWORD nextUserDeviceID;
 extern WDFDEVICE ControlDevice;
 
 typedef struct _DEVICE_EXTENSION
 {
-	WDFDEVICE Wdfdevice;
+	WDFDEVICE WdfDevice;
+
+	//
+	// Device identifier
+	//
+	DWORD DeviceID;
 
 	//
 	// The real connect data that this driver reports to
@@ -58,3 +64,5 @@ NTSTATUS UserCommunication_RegisterControlDevice(WDFDRIVER WdfDriver);
 
 EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL UserCommunication_EvtIoDeviceControl;
 EVT_WDF_DEVICE_SHUTDOWN_NOTIFICATION UserCommunication_EvtWdfDeviceShutdownNotification;
+
+WDFDEVICE KBFLTR_GetDeviceByCustomID(WDFDRIVER WdfDriver, DWORD DeviceID);
