@@ -1,56 +1,33 @@
 #pragma once
 
-#pragma comment(lib, "hid.lib")
-#include <stdint.h>
 #include <Windows.h>
-#include <hidsdi.h>
-#include <hidusage.h>
-#include <string>
-#include <vector>
-#include <fstream>
-#include <deque>
-#include <wchar.h>
+#include "shared.h"
 
 #ifndef EXPORT
 #define EXPORT _declspec(dllexport)
 #endif
 
-extern bool (*LlkPress_Callback)(struct KeyboardEventArgs args);
-
-struct KeyboardStruct {
-	HANDLE Handle;
-	char DeviceName[1024];
-};
-
-struct KeyboardEventArgs {
-	uint32_t vkCode;
-	uint32_t scanCode;
-	struct KeyboardStruct source;
-};
-
-struct DecisionRecord
-{
-	USHORT virtualKeyCode;
-	BOOL decision;
-
-	DecisionRecord(USHORT _virtualKeyCode, BOOL _decision) : virtualKeyCode(_virtualKeyCode), decision(_decision) {}
-};
-
-
 DWORD WINAPI Llk(HMODULE hModule);
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-LRESULT CALLBACK KeyProc(int nCode, WPARAM wParam, LPARAM lParam);
+// extern void (*Llk_KeyPressCallback)(PCUSTOM_KEYBOARD_INPUT input, DWORD size);
+extern void (*Llk_KeyPressCallback)(CUSTOM_KEYBOARD_INPUT input);
 
-void RefreshDevices();
+typedef struct _OVL_WRAPPER {
+	OVERLAPPED  Overlapped;
+	CUSTOM_KEYBOARD_INPUT        ReturnedSequence;
+} OVL_WRAPPER, * POVL_WRAPPER;
 
+DWORD WINAPI Llk_Internal_CompletionPortThread(LPVOID PortHandle);
+DWORD Llk_Internal_startConnectionHandle(DWORD dwThreadId, HANDLE* handle);
+DWORD Llk_Internal_openQueueIoctl();
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-	EXPORT void LlkPress_Callback_Register(bool(*cb)(struct KeyboardEventArgs args));
-	EXPORT bool LlkPress_GetKeyboardStruct(HANDLE handle, struct KeyboardStruct *kbS);
+	// EXPORT void Llk_RegisterKeyPressCallback(DWORD maxSize, void(*cb)(PCUSTOM_KEYBOARD_INPUT input, DWORD size));
+	EXPORT void Llk_RegisterKeyPressCallback(void(*cb)(CUSTOM_KEYBOARD_INPUT input));
+	EXPORT void Llk_SendKeyPress(PCUSTOM_KEYBOARD_INPUT input, DWORD size);
 
 #ifdef __cplusplus
 }

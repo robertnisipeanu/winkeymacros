@@ -3,13 +3,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30309.148
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LowLevelKeyboard", "LowLevelKeyboard\LowLevelKeyboard.vcxproj", "{94A3C3A8-B1C5-45ED-849A-B404471A6884}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "KeyboardFilterDriverKMDF", "KeyboardFilterDriverKMDF\KeyboardFilterDriverKMDF.vcxproj", "{89F5C488-1CB5-47F4-B640-CF099B631400}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleTest", "ConsoleTest\ConsoleTest.csproj", "{0C6E0292-6DEE-4FD5-9D0C-A45658B4B162}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ConsoleCommunicationTest", "ConsoleCommunicationTest\ConsoleCommunicationTest.vcxproj", "{7B3182AD-9011-4EE6-914E-8871F9FAA0FC}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LowLevelKeyboard", "LowLevelKeyboard\LowLevelKeyboard.vcxproj", "{F69EA744-D834-450A-AE97-A25F12EB0F0C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -25,20 +25,6 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Debug|Any CPU.ActiveCfg = Debug|Win32
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Debug|ARM.ActiveCfg = Debug|Win32
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Debug|ARM64.ActiveCfg = Debug|Win32
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Debug|x64.ActiveCfg = Debug|x64
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Debug|x64.Build.0 = Debug|x64
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Debug|x86.ActiveCfg = Debug|Win32
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Debug|x86.Build.0 = Debug|Win32
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Release|Any CPU.ActiveCfg = Release|Win32
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Release|ARM.ActiveCfg = Release|Win32
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Release|ARM64.ActiveCfg = Release|Win32
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Release|x64.ActiveCfg = Release|x64
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Release|x64.Build.0 = Release|x64
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Release|x86.ActiveCfg = Release|Win32
-		{94A3C3A8-B1C5-45ED-849A-B404471A6884}.Release|x86.Build.0 = Release|Win32
 		{89F5C488-1CB5-47F4-B640-CF099B631400}.Debug|Any CPU.ActiveCfg = Debug|Win32
 		{89F5C488-1CB5-47F4-B640-CF099B631400}.Debug|ARM.ActiveCfg = Debug|ARM
 		{89F5C488-1CB5-47F4-B640-CF099B631400}.Debug|ARM.Build.0 = Debug|ARM
@@ -99,6 +85,20 @@ Global
 		{7B3182AD-9011-4EE6-914E-8871F9FAA0FC}.Release|x64.Build.0 = Release|x64
 		{7B3182AD-9011-4EE6-914E-8871F9FAA0FC}.Release|x86.ActiveCfg = Release|Win32
 		{7B3182AD-9011-4EE6-914E-8871F9FAA0FC}.Release|x86.Build.0 = Release|Win32
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|ARM.ActiveCfg = Debug|Win32
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|ARM64.ActiveCfg = Debug|Win32
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|x64.ActiveCfg = Debug|x64
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|x64.Build.0 = Debug|x64
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|x86.ActiveCfg = Debug|Win32
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|x86.Build.0 = Debug|Win32
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|Any CPU.ActiveCfg = Release|Win32
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|ARM.ActiveCfg = Release|Win32
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|ARM64.ActiveCfg = Release|Win32
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|x64.ActiveCfg = Release|x64
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|x64.Build.0 = Release|x64
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|x86.ActiveCfg = Release|Win32
+		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,6 +1,7 @@
 #include "Driver.h"
 
 DWORD nextUserDeviceID = 1;
+PDEVICE_EXTENSION _keyboards = NULL;
 
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath) {
 	WDF_DRIVER_CONFIG config;
@@ -31,7 +32,6 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 	}
 
 	KdPrint(("[KB] DriverObject created\n"));
-
 	//
 	// Create a virtual device that will be used for IOCTL communication
 	// with the app
@@ -141,7 +141,7 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 	UNREFERENCED_PARAMETER(InputBufferLength);
 	PAGED_CODE();
 
-	KdPrint(("[KB] EvtIoInternalDeviceControl"));
+	// KdPrint(("[KB] EvtIoInternalDeviceControl"));
 
 	WDFDEVICE hDevice;
 	PDEVICE_EXTENSION devExt;
@@ -161,6 +161,7 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 	switch (IoControlCode) {
 
 	case IOCTL_INTERNAL_KEYBOARD_CONNECT:
+	{
 		//
 		// Only allow one connection
 		//
@@ -173,7 +174,7 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 		// Get the input buffer from the request
 		// (Parameters.DeviceIoControl.Type3InputBuffer)
 		//
-		status = WdfRequestRetrieveInputBuffer(Request, sizeof(CONNECT_DATA), &connectData, &length);
+		status = WdfRequestRetrieveInputBuffer(Request, sizeof(CONNECT_DATA), (PVOID*)&connectData, &length);
 		if (!NT_SUCCESS(status)) {
 			KdPrint(("[KB] WdfRequestRetrieveInputBuffer failed with error code 0x%x\n", status));
 			break;
@@ -187,7 +188,7 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 		// Asign a DeviceID
 		//
 		devExt->DeviceID = nextUserDeviceID++;
-		
+
 		//
 		// Hook into the report chain. Everytime a keyboard packet is reported
 		// to the system, KeyboardFilter_ServiceCallback will be called
@@ -201,9 +202,15 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 
 #pragma warning(default:4152)
 
-		break;
+		//
+		// Add device extension to our global keyboard manager
+		//
+		HASH_ADD(hh, _keyboards, DeviceID, sizeof(DWORD), devExt);
 
+		break;
+	}
 	case IOCTL_INTERNAL_KEYBOARD_DISCONNECT:
+	{
 		//
 		// Clear the connection parameters in the device extension.
 		//
@@ -211,13 +218,27 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 		devExt->UpperConnectData.ClassService = NULL;
 
 		//
+		// Remove device extension from keyboards hash table
+		//
+		PDEVICE_EXTENSION devExtHashSearch;
+		DWORD devExtHashID = devExt->DeviceID;
+#pragma warning(disable:4127)
+		HASH_FIND(hh, _keyboards, &devExtHashID, sizeof(DWORD), devExtHashSearch);
+#pragma warning(default:4127)
+		if (devExtHashSearch != NULL) {
+			HASH_DEL(_keyboards, devExtHashSearch);
+			KdPrint(("[KB] Deleted device extension from keyboards hash table\n"));
+		}
+
+		//
 		// Delete the created WdfDevice
 		//
 		WdfObjectDelete(devExt->WdfDevice);
 
 		break;
-
+	}
 	case IOCTL_KEYBOARD_QUERY_ATTRIBUTES:
+	{
 		forwardWithCompletionRoutine = TRUE;
 		completionContext = devExt;
 		break;
@@ -227,6 +248,7 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 		// the stack. These queries must be successful for the RIT to communicate
 		// with the keyboard.
 		//
+	}
 	case IOCTL_KEYBOARD_QUERY_INDICATOR_TRANSLATION:
 	case IOCTL_KEYBOARD_QUERY_INDICATORS:
 	case IOCTL_KEYBOARD_SET_INDICATORS:
@@ -333,17 +355,19 @@ Return Value:
 --*/
 VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD_INPUT_DATA InputDataStart, IN PKEYBOARD_INPUT_DATA InputDataEnd, IN OUT PULONG InputDataConsumed) {
 
-	PDEVICE_EXTENSION devExt;
 	WDFDEVICE WdfDevice;
+	WdfDevice = WdfWdmDeviceGetWdfDeviceHandle(DeviceObject);
+
+	PDEVICE_EXTENSION devExt;
+	devExt = GetContextFromDevice(WdfDevice);
+
+#ifdef KEYBOARDFILTER_IS_OLD_VERSION
 
 	PINVERTED_DEVICE_CONTEXT InvertedDeviceContext;
 	NTSTATUS QueueReturnStatus;
 	ULONG_PTR info;
 	WDFREQUEST notifyRequest;
 	PVOID  bufferPointer;
-
-	WdfDevice = WdfWdmDeviceGetWdfDeviceHandle(DeviceObject);
-	devExt = GetContextFromDevice(WdfDevice);
 
 	//
 	// ControlDevice not yet initialized, process keyboard input normally
@@ -356,7 +380,7 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 	}
 	InvertedDeviceContext = InvertedGetContextFromDevice(ControlDevice);
 
-	KdPrint(("[KB] Input from device: %u; %u\n", devExt->KeyboardAttributes.KeyboardIdentifier.Type, devExt->KeyboardAttributes.KeyboardIdentifier.Subtype));
+	//KdPrint(("[KB] Input from device: %u; %u\n", devExt->KeyboardAttributes.KeyboardIdentifier.Type, devExt->KeyboardAttributes.KeyboardIdentifier.Subtype));
 
 	NTSTATUS queueAvailable = WdfIoQueueRetrieveNextRequest(InvertedDeviceContext->NotificationQueue, &notifyRequest);
 
@@ -370,7 +394,7 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 		return;
 	}
 
-	KdPrint(("[KB] Got a queue\n"));
+	//KdPrint(("[KB] Got a queue\n"));
 
 	//
 	// Get a pointer to the output buffer that was passed-in with the user
@@ -455,6 +479,9 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 	*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
 
 	// Notify END
+#else
+	(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
+#endif
 }
 
 
@@ -492,7 +519,7 @@ VOID KeyboardFilterRequestCompletionRoutine(WDFREQUEST Request, WDFIOTARGET Targ
 	if (NT_SUCCESS(status) && CompletionParams->Type == WdfRequestTypeDeviceControlInternal && CompletionParams->Parameters.Ioctl.IoControlCode == IOCTL_KEYBOARD_QUERY_ATTRIBUTES) {
 		if (CompletionParams->Parameters.Ioctl.Output.Length >= sizeof(KEYBOARD_ATTRIBUTES)) {
 
-			KdPrint(("[KB] Cached KeyboardAttributes"));
+			KdPrint(("[KB] Cached KeyboardAttributes\n"));
 			status = WdfMemoryCopyToBuffer(buffer, CompletionParams->Parameters.Ioctl.Output.Offset, &devExt->KeyboardAttributes, sizeof(KEYBOARD_ATTRIBUTES));
 		}
 	}
@@ -502,7 +529,9 @@ VOID KeyboardFilterRequestCompletionRoutine(WDFREQUEST Request, WDFIOTARGET Targ
 	return;
 }
 
-///
+/**
+* Get's a WdfDevice object from a driver-generated DeviceID
+*/
 WDFDEVICE KBFLTR_GetDeviceByCustomID(WDFDRIVER WdfDriver, DWORD DeviceID) {
 
 	PDRIVER_OBJECT WdmDriver = WdfDriverWdmGetDriverObject(WdfDriver);
@@ -512,6 +541,16 @@ WDFDEVICE KBFLTR_GetDeviceByCustomID(WDFDRIVER WdfDriver, DWORD DeviceID) {
 	//
 	PDEVICE_OBJECT currDevice = WdmDriver->DeviceObject;
 
+	LARGE_INTEGER startTime, endTime;
+	KeQuerySystemTimePrecise(&startTime);
+	PDEVICE_EXTENSION devExtHashSearch;
+#pragma warning(disable:4127)
+	HASH_FIND(hh, _keyboards, &DeviceID, sizeof(DWORD), devExtHashSearch);
+#pragma warning(default:4127)
+	KeQuerySystemTimePrecise(&endTime);
+	LONGLONG totalTime = endTime.QuadPart - startTime.QuadPart;
+
+	KeQuerySystemTimePrecise(&startTime);
 	while (currDevice != NULL) {
 
 		//
@@ -529,7 +568,12 @@ WDFDEVICE KBFLTR_GetDeviceByCustomID(WDFDRIVER WdfDriver, DWORD DeviceID) {
 		// of DEVICE_EXTENSION
 		//
 		if (devExt != NULL) {
-			if (devExt->DeviceID == DeviceID || DeviceID == 0) return WdfDevice;
+			if (devExt->DeviceID == DeviceID || DeviceID == 0) {
+				KeQuerySystemTimePrecise(&endTime);
+				LONGLONG newTotalTime = endTime.QuadPart - startTime.QuadPart;
+				KdPrint(("[KB] DeviceID: %u, HashTable time: %I64d, Array loop time: %I64d\n", DeviceID, totalTime, newTotalTime));
+				return WdfDevice;
+			}
 		}
 
 		//

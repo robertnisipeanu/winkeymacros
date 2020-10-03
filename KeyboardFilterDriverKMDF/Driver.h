@@ -24,7 +24,9 @@
 
 #include <initguid.h>
 #include <devguid.h>
+#include "UserCommunication.h"
 #include "shared.h"
+#include "uthash.h"
 
 extern DWORD nextUserDeviceID;
 extern WDFDEVICE ControlDevice;
@@ -48,6 +50,8 @@ typedef struct _DEVICE_EXTENSION
 	//
 	KEYBOARD_ATTRIBUTES KeyboardAttributes;
 
+	UT_hash_handle hh;
+
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
 
 typedef struct _INVERTED_DEVICE_CONTEXT {
@@ -57,19 +61,14 @@ typedef struct _INVERTED_DEVICE_CONTEXT {
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_EXTENSION, GetContextFromDevice)
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(INVERTED_DEVICE_CONTEXT, InvertedGetContextFromDevice)
 
-
-DRIVER_INITIALIZE DriverEntry;
-EVT_WDF_DRIVER_DEVICE_ADD KeyboardFilter_EvtDeviceAdd;
-
-EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL KeyboardFilter_EvtIoInternalDeviceControl;
-EVT_WDF_REQUEST_COMPLETION_ROUTINE KeyboardFilterRequestCompletionRoutine;
-
 VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD_INPUT_DATA InputDataStart,
 	IN PKEYBOARD_INPUT_DATA InputDataEnd, IN OUT PULONG InputDataConsumed);
 
-NTSTATUS UserCommunication_RegisterControlDevice(WDFDRIVER WdfDriver);
-
-EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL UserCommunication_EvtIoDeviceControl;
-EVT_WDF_DEVICE_SHUTDOWN_NOTIFICATION UserCommunication_EvtWdfDeviceShutdownNotification;
-
 WDFDEVICE KBFLTR_GetDeviceByCustomID(WDFDRIVER WdfDriver, DWORD DeviceID);
+
+extern "C" {
+	DRIVER_INITIALIZE DriverEntry;
+	EVT_WDF_DRIVER_DEVICE_ADD KeyboardFilter_EvtDeviceAdd;
+	EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL KeyboardFilter_EvtIoInternalDeviceControl;
+	EVT_WDF_REQUEST_COMPLETION_ROUTINE KeyboardFilterRequestCompletionRoutine;
+}

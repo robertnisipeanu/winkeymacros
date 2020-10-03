@@ -24,6 +24,9 @@
     <ClInclude Include="LowLevelKeyboard.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="shared.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">

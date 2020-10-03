@@ -1,4 +1,4 @@
-#include "Driver.h"
+#include "UserCommunication.h"
 
 WDFDEVICE ControlDevice = NULL;
 
@@ -123,8 +123,21 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 	devContext = InvertedGetContextFromDevice(WdfIoQueueGetDevice(Queue));
 
 
-	KdPrint(("[KB] ControlDevice_EvtIoDeviceControl with ICC 0x%u\n", IoControlCode));
+	// KdPrint(("[KB] ControlDevice_EvtIoDeviceControl with ICC 0x%u\n", IoControlCode));
 	switch (IoControlCode) {
+
+// How old version worked:
+// - when a key press happens, cancel the key press and send the key press to an user mode app
+// - the user mode app would send back what keys to be pressed (the same key it got or a modified version if it's a macro)
+// How new version works:
+// - the app tells the driver that it should replace X key with [Y, Z, ...] keys and the driver stores that information into a hashtable
+// - when a keypress happens, the driver checks the hashtable if there is any macro for that key
+// Because the old version had to communicate with the app for every key press, there could be a delay between the physical key press and the driver gets the keypress back from the usermode app.
+// If the usermode app would freeze or there is too much cpu load and the app has lower priority than the process that is using the CPU, then some keypresses can even take seconds to be processed.
+// Another reason why the behaviour needed to be changed it's because this is a kernel driver, it gets EVERY key press, even if that happens inside a secure desktop (secure desktop = UAC prompt/winlogon page)
+// and a bad app could use that to get the user password
+// TLDR: OLD_VERSION was slower and less secure
+#ifdef KEYBOARDFILTER_IS_OLD_VERSION
 		case IOCTL_KEYBOARDFILTER_KEYPRESSED_QUEUE: {
 
 			//
@@ -146,7 +159,7 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 				break;
 			}
 
-			KdPrint(("[KB] Added IOCTL to waiting queue\n"));
+			// KdPrint(("[KB] Added IOCTL to waiting queue\n"));
 
 			//
 			// We exit the function so the queue doesn't get completed
@@ -172,23 +185,13 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			size_t numOfKeys = InputBufferLength / sizeof(CUSTOM_KEYBOARD_INPUT);
 			
 			PCUSTOM_KEYBOARD_INPUT keyInput;
-			WDFMEMORY keyInputMemory;
-
-			//
-			// Allocate memory for input buffer
-			//
-			NTSTATUS memoryAllocStatus = WdfMemoryCreate(WDF_NO_OBJECT_ATTRIBUTES, NonPagedPool, 0, InputBufferLength, &keyInputMemory, &keyInput);
-			if (!NT_SUCCESS(memoryAllocStatus)) {
-				KdPrint(("[KB] Failed to allocate memory\n"));
-				break;
-			}
 
 			//
 			// Retrieve input buffer
 			//
-			memoryAllocStatus = WdfRequestRetrieveInputBuffer(Request, sizeof(CUSTOM_KEYBOARD_INPUT), (PVOID *) &keyInput, NULL);
+			NTSTATUS memoryAllocStatus = WdfRequestRetrieveInputBuffer(Request, sizeof(CUSTOM_KEYBOARD_INPUT), (PVOID *) &keyInput, NULL);
 			if (!NT_SUCCESS(memoryAllocStatus)) {
-				KdPrint(("[KB] Failed to retrieve input buffer"));
+				KdPrint(("[KB] Failed to retrieve input buffer\n"));
 				break;
 			}
 
@@ -233,14 +236,131 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			status = STATUS_SUCCESS;
 			info = 0;
 
-			WdfObjectDelete(keyInputMemory);
-
+			break;
+		}
+#endif
+		case IOCTL_KEYBOARDFILTER_GETKEYBOARDSNUMBER: {
+			// TODO
+			status = STATUS_SUCCESS;
 			break;
 		}
 		case IOCTL_KEYBOARDFILTER_GETKEYBOARDS: {
 			// TODO
 			status = STATUS_SUCCESS;
-			info = 0;
+			break;
+		}
+		case IOCTL_KEYBOARDFILTER_ADDMACRO: {
+
+			//
+			// The KEYBOARD_MACRO object is required as input for this IOCTL
+			//
+			if (InputBufferLength < sizeof(INPUT_KEYBOARD_MACRO)) {
+				KdPrint(("[KB] InputBufferLength is too small\n"));
+				status = STATUS_INVALID_BUFFER_SIZE;
+				break;
+			}
+
+			WDFMEMORY inputBufferMemory;
+
+			INPUT_KEYBOARD_MACRO keyboard;
+
+			WDFMEMORY keyboardKeysMemory;
+			PINPUT_KEYBOARD_KEY keyboardKeys;
+
+			//
+			// Retrieve the memory in which the input buffer is stored
+			//
+			status = WdfRequestRetrieveInputMemory(Request, &inputBufferMemory);
+			if (!NT_SUCCESS(status)) {
+				KdPrint(("[KB] Failed to retrieve input buffer\n"));
+				break;
+			}
+
+			//
+			// Copy the INPUT_KEYBOARD_MACRO object from the input buffer memory
+			//
+			status = WdfMemoryCopyToBuffer(inputBufferMemory, 0, &keyboard, sizeof(INPUT_KEYBOARD_MACRO));
+			if (!NT_SUCCESS(status)) {
+				KdPrint(("[KB] Failed to retrieve input buffer\n"));
+				break;
+			}
+
+			//
+			// Calculate the number of INPUT_KEYBOARD_KEYs object remains in the input buffer after removing the INPUT_KEYBOARD_MACRO obj
+			//
+			size_t numOfKeys = (InputBufferLength - sizeof(INPUT_KEYBOARD_MACRO)) / sizeof(INPUT_KEYBOARD_KEY);
+
+			//
+			// If we got 0 KEYBOARD_MACRO_KEYs, then delete the macro for the key
+			//
+			if (numOfKeys == 0) {
+				// TODO: Got 0 keys, so delete the macro
+				status = STATUS_SUCCESS;
+				break;
+			}
+
+			//
+			// Allocate memory for the INPUT_KEYBOARD_KEY array
+			//
+			status = WdfMemoryCreate(WDF_NO_OBJECT_ATTRIBUTES, NonPagedPool, 0, numOfKeys * sizeof(INPUT_KEYBOARD_KEY), &keyboardKeysMemory, (PVOID *) &keyboardKeys);
+			if (!NT_SUCCESS(status)) {
+				KdPrint(("[KB] Failed to allocate memory for keyboardKeys array\n"));
+				break;
+			}
+
+			//
+			// Retrieve the KEYBOARD_MACRO_KEY array from the input buffer
+			//
+			status = WdfMemoryCopyToBuffer(inputBufferMemory, sizeof(INPUT_KEYBOARD_MACRO), keyboardKeys, numOfKeys * sizeof(INPUT_KEYBOARD_KEY));
+			if (!NT_SUCCESS(status)) {
+				WdfObjectDelete(keyboardKeysMemory);
+				KdPrint(("[KB] Failed to retrieve input buffer\n"));
+				break;
+			}
+
+			
+
+			WdfObjectDelete(keyboardKeysMemory);
+
+			/*if (InputBufferLength < sizeof(CUSTOM_KEYBOARD_INPUT)) {
+				KdPrint(("[KB] InputBufferLength is too small\n"));
+				break;
+			}
+
+			WDFMEMORY inputBufferMemory;
+			CUSTOM_KEYBOARD_INPUT test;
+			int32_t intVal;
+
+			//
+			// Retrieve input buffer
+			//
+			NTSTATUS bufferStatus = WdfRequestRetrieveInputMemory(Request, &inputBufferMemory);
+			if (!NT_SUCCESS(bufferStatus)) {
+				KdPrint(("[KB] Failed to retrieve input buffer\n"));
+				break;
+			}
+
+			bufferStatus = WdfMemoryCopyToBuffer(inputBufferMemory, 0, &test, sizeof(CUSTOM_KEYBOARD_INPUT));
+			if (!NT_SUCCESS(bufferStatus)) {
+				KdPrint(("[KB] Failed to retrieve input buffer\n"));
+				break;
+			}
+
+			if (InputBufferLength - sizeof(CUSTOM_KEYBOARD_INFO) < sizeof(int32_t)) {
+				KdPrint(("[KB] intVal not present\n"));
+				break;
+			}
+
+			bufferStatus = WdfMemoryCopyToBuffer(inputBufferMemory, sizeof(CUSTOM_KEYBOARD_INPUT), &intVal, sizeof(int32_t));
+			if (!NT_SUCCESS(bufferStatus)) {
+				KdPrint(("[KB] Failed to retrieve input buffer\n"));
+				break;
+			}
+
+			KdPrint(("[KB] %u %u %u %u %u %u %d\n", test.DeviceID, test.UnitId, test.MakeCode, test.ExtraInformation, test.Flags, test.Reserved, intVal));*/
+			
+			status = STATUS_SUCCESS;
+
 			break;
 		}
 
