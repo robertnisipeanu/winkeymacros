@@ -27,6 +27,10 @@
 #include "UserCommunication.h"
 #include "shared.h"
 #include "uthash.h"
+#include "operators.h"
+#include "MacroManager.h"
+
+#define KBFLTR_KP_TAG 'Keyp'
 
 extern DWORD nextUserDeviceID;
 extern WDFDEVICE ControlDevice;
@@ -50,6 +54,11 @@ typedef struct _DEVICE_EXTENSION
 	//
 	KEYBOARD_ATTRIBUTES KeyboardAttributes;
 
+	//
+	// Pointer to the device specific macro manager
+	//
+	PVOID MacroManager; // MacroManager* MacroManager
+
 	UT_hash_handle hh;
 
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
@@ -64,11 +73,13 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(INVERTED_DEVICE_CONTEXT, InvertedGetContextFr
 VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD_INPUT_DATA InputDataStart,
 	IN PKEYBOARD_INPUT_DATA InputDataEnd, IN OUT PULONG InputDataConsumed);
 
-WDFDEVICE KBFLTR_GetDeviceByCustomID(WDFDRIVER WdfDriver, DWORD DeviceID);
+WDFDEVICE KBFLTR_GetDeviceByCustomID(DWORD DeviceID);
+size_t KBFLTR_GetNumberOfKeyboards();
 
 extern "C" {
 	DRIVER_INITIALIZE DriverEntry;
 	EVT_WDF_DRIVER_DEVICE_ADD KeyboardFilter_EvtDeviceAdd;
 	EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL KeyboardFilter_EvtIoInternalDeviceControl;
 	EVT_WDF_REQUEST_COMPLETION_ROUTINE KeyboardFilterRequestCompletionRoutine;
+	EVT_WDF_OBJECT_CONTEXT_CLEANUP KeyboardFilter_OnKeyboardDisconnect;
 }

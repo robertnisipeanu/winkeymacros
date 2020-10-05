@@ -36,22 +36,31 @@
     <ClInclude Include="uthash.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="MacroManager.h">
+    <ClInclude Include="UserCommunication.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="UserCommunication.h">
+    <ClInclude Include="operators.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MacroManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="MacroManager.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="UserCommunication.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Driver.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="operators.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MacroManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="cpp.hint" />
   </ItemGroup>
 </Project>

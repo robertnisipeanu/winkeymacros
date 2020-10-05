@@ -1,56 +1,62 @@
 #include "MacroManager.h"
 
-PKB_MACRO_HASHVALUE _macros = NULL; // HashTable
+MacroManager::MacroManager() {
+	this->_macros = NULL;
+}
 
-INPUT_KEYBOARD_MACRO getMacroKeyZeroFilled(INPUT_KEYBOARD_MACRO macroKey) {
-	INPUT_KEYBOARD_MACRO zeroFilledMacro;
-
-	RtlZeroMemory(&zeroFilledMacro, sizeof(INPUT_KEYBOARD_MACRO));
-
-	zeroFilledMacro.DeviceID = macroKey.DeviceID;
-	zeroFilledMacro.ReplacedKeyScanCode = macroKey.ReplacedKeyScanCode;
-
-	return zeroFilledMacro;
+MacroManager::~MacroManager() {
+	this->clearAllMacros();
 }
 
 /// <summary>
-/// Gets the macro for the specified macro key
+/// Clears all the macros the current MacroManager instance has
 /// </summary>
-/// <param name="macroKey">
-/// The macro key (keyboard/key combination) to check for
+void MacroManager::clearAllMacros() {
+	PKB_MACRO_HASHVALUE s, tmp;
+
+	HASH_ITER(hh, this->_macros, s, tmp) {
+		this->deleteMacroInternal(s);
+	}
+}
+
+/// <summary>
+/// Gets the macro for the specified key
+/// </summary>
+/// <param name="scanCode">
+/// ScanCode of the key that contains the macro
 /// </param>
 /// <returns>
-/// A pointer to the KB_MACRO_HASHVALUE macro if there is one or NULL if no macro was found
+/// A pointer to the KB_MACRO_HASHVALUE macro if there is one orNULL if no macro was found
 /// </returns>
-PKB_MACRO_HASHVALUE MacroManager::getMacro(INPUT_KEYBOARD_MACRO macroKey) {
+PKB_MACRO_HASHVALUE MacroManager::getMacro(USHORT scanCode) {
 	PKB_MACRO_HASHVALUE result;
 
-	INPUT_KEYBOARD_MACRO key = getMacroKeyZeroFilled(macroKey);
-
 #pragma warning(disable:4127)
-	HASH_FIND(hh, _macros, &key, sizeof(INPUT_KEYBOARD_MACRO), result);
+	HASH_FIND(hh, this->_macros, &scanCode, sizeof(USHORT), result);
 #pragma warning(default:4127)
 
 	return result;
 }
 
 /// <summary>
-/// Check if there is a macro on that keyboard/key combination
+/// Check if there is a macro on the specified key
 /// </summary>
-/// <param name="macroKey">
-/// The macro key (keyboard/key combination) to check for
+/// <param name="scanCode">
+/// ScanCode of the key to check if there is a macro on
 /// </param>
-/// <returns></returns>
-BOOLEAN MacroManager::isMacro(INPUT_KEYBOARD_MACRO macroKey) {
-	PKB_MACRO_HASHVALUE result = MacroManager::getMacro(macroKey);
+/// <returns>
+/// TRUE if there is a macro on that key, otherwise FALSE
+/// </returns>
+BOOLEAN MacroManager::isMacro(USHORT scanCode) {
+	PKB_MACRO_HASHVALUE result = this->getMacro(scanCode);
 	return result != NULL;
 }
 
 /// <summary>
 /// Adds a macro to the macros hashtable
 /// </summary>
-/// <param name="macro">
-/// A structure containing the DeviceID and the ScanCode of the key that would be replaced
+/// <param name="scanCode">
+/// ScanCode of the key that would be replaced
 /// </param>
 /// <param name="keys">
 /// A pointer to an array (the first element of it) of keys that would replace the macro key.
@@ -59,63 +65,80 @@ BOOLEAN MacroManager::isMacro(INPUT_KEYBOARD_MACRO macroKey) {
 /// <param name="keysSize">
 /// The size of the keys array
 /// </param>
-BOOLEAN MacroManager::addMacro(INPUT_KEYBOARD_MACRO macroKey, PINPUT_KEYBOARD_KEY keys, size_t keysSize) {
-
-	PKB_MACRO_HASHVALUE macro = MacroManager::getMacro(macroKey);
+/// <returns>
+/// TRUE if macro allocations is successfull, otherwise FALSE
+/// </returns>
+BOOLEAN MacroManager::addMacro(USHORT scanCode, PINPUT_KEYBOARD_KEY keys, size_t keysSize) {
 
 	//
 	// If macro already exists, delete it
 	//
-	if (macro != NULL) {
-		KdPrint(("[KB] Macro already exists, deleting it [%u, %u]\n", macroKey.DeviceID, macroKey.ReplacedKeyScanCode));
-		MacroManager::deleteMacro(macroKey);
-		macro = NULL;
+	if (this->isMacro(scanCode)) {
+		KdPrint(("[KB] Macro already exists, deleting it [%u]\n", scanCode));
+		this->deleteMacro(scanCode);
 	}
 
 	// Allocate memory to store the replacing keys sequence
-	PINPUT_KEYBOARD_KEY newKeysBuffer = (PINPUT_KEYBOARD_KEY) ExAllocatePoolWithTag(NonPagedPool, keysSize, KBFLTR_MM_TAG);
-	
+	PINPUT_KEYBOARD_KEY newKeysBuffer = (PINPUT_KEYBOARD_KEY)ExAllocatePoolWithTag(NonPagedPool, keysSize, KBFLTR_MM_TAG);
+
 	if (newKeysBuffer == NULL) {
 		KdPrint(("[KB] Failed to allocate memory for macro keys\n"));
 		return FALSE;
 	}
 
+	// Copy keys into allocated memory
+	RtlCopyMemory(newKeysBuffer, keys, keysSize);
+
 	// Allocate memory for the macro
-	macro = (PKB_MACRO_HASHVALUE)ExAllocatePoolWithTag(NonPagedPool, keysSize, KBFLTR_MM_TAG);
+	PKB_MACRO_HASHVALUE macro = (PKB_MACRO_HASHVALUE)ExAllocatePoolWithTag(NonPagedPool, sizeof(KB_MACRO_HASHVALUE), KBFLTR_MM_TAG);
 
 	if (macro == NULL) {
+		ExFreePoolWithTag(newKeysBuffer, KBFLTR_MM_TAG);
 		KdPrint(("[KB] Failed to allocate memory for macro\n"));
 		return FALSE;
 	}
 
-	macro->OriginalKey = getMacroKeyZeroFilled(macroKey);;
+	// Populate macro object with the data
+	macro->OriginalKeyScanCode = scanCode;
 	macro->NewKeys = newKeysBuffer;
 	macro->NewKeysLength = keysSize / sizeof(INPUT_KEYBOARD_KEY);
-	
-	HASH_ADD(hh, _macros, OriginalKey, sizeof(INPUT_KEYBOARD_MACRO), macro);
+
+	// Add macro object to macros hashtable
+	HASH_ADD(hh, this->_macros, OriginalKeyScanCode, sizeof(USHORT), macro);
 
 	return TRUE;
-
 }
 
-void MacroManager::deleteMacro(INPUT_KEYBOARD_MACRO macroKey) {
-
-	macroKey = getMacroKeyZeroFilled(macroKey);
-
+/// <summary>
+/// Deletes a macro from the hashtable
+/// </summary>
+/// <param name="scanCode">
+/// The scancode of the key that contains the macro
+/// </param>
+void MacroManager::deleteMacro(USHORT scanCode) {
 	// If macro doesn't exist, then we don't need to delete it
-	if (!MacroManager::isMacro(macroKey)) return;
+	if (!this->isMacro(scanCode)) return;
 
 	// Get the macro pointer
-	PKB_MACRO_HASHVALUE macro = MacroManager::getMacro(macroKey);
+	PKB_MACRO_HASHVALUE macro = MacroManager::getMacro(scanCode);
 
-	// Remove the macro from the hashtable
-	HASH_DELETE(hh, _macros, macro);
+	// Delete the macro from the hashtable
+	this->deleteMacroInternal(macro);
+}
+
+/// <summary>
+/// Deletes macro from hashtable and clears it's memory
+/// </summary>
+/// <param name="macro">
+/// Pointer to the macro that should be deleted
+/// </param>
+void MacroManager::deleteMacroInternal(PKB_MACRO_HASHVALUE macro) {
+	// Remove the macor from the hashtable
+	HASH_DELETE(hh, this->_macros, macro);
 
 	// Cleanup the macro's replacing keys memory
 	ExFreePoolWithTag(macro->NewKeys, KBFLTR_MM_TAG);
 
 	// Cleanup the macro memory
 	ExFreePoolWithTag(macro, KBFLTR_MM_TAG);
-
 }
-

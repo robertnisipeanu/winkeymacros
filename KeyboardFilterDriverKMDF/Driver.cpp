@@ -10,7 +10,6 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 
 	KdPrint(("[KB] Loading driver...\n"));
 
-	//
 	// Initialize driver config to control the attributes that
 	// are global to the driver. Note that framework by default
 	// provides a driver unload routine. If you create any resources
@@ -18,13 +17,10 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 	// you can override that by manually setting the EvtDriverUnload in the
 	// config structure. In general xxx_CONFIG_INIT macros are provided to
 	// initialize most commonly used members
-	//
 
 	WDF_DRIVER_CONFIG_INIT(&config, KeyboardFilter_EvtDeviceAdd);
 
-	//
 	// Create a framework driver object to represent our driver
-	//
 	status = WdfDriverCreate(DriverObject, RegistryPath, WDF_NO_OBJECT_ATTRIBUTES, &config, &WdfDriver);
 	if (!NT_SUCCESS(status)) {
 		KdPrint(("[KB] WdfDriverCreate failed with status 0x%x\n", status));
@@ -32,17 +28,14 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 	}
 
 	KdPrint(("[KB] DriverObject created\n"));
-	//
+
 	// Create a virtual device that will be used for IOCTL communication
 	// with the app
-	//
 	status = UserCommunication_RegisterControlDevice(WdfDriver);
 	if (!NT_SUCCESS(status)) {
 		KdPrint(("[KB] RegisterControlDevice failed with status 0x%x\n", status));
 		return status;
 	}
-
-	//status = WdfDeviceCreate();
 
 	return status;
 }
@@ -80,23 +73,20 @@ NTSTATUS KeyboardFilter_EvtDeviceAdd(IN WDFDRIVER Driver, IN PWDFDEVICE_INIT Dev
 
 	KdPrint(("[KB] FilterEvtDeviceAdd\n"));
 
-	//
 	// Tell the framework that you are filter driver. Framework
 	// takes care of inherting all the device flags & characteristics
 	// from the lower device you are attaching to
-	//
 	WdfFdoInitSetFilter(DeviceInit);
 
 	WdfDeviceInitSetDeviceType(DeviceInit, FILE_DEVICE_KEYBOARD);
 
 	WDF_OBJECT_ATTRIBUTES deviceAttributes;
 	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&deviceAttributes, DEVICE_EXTENSION);
+	deviceAttributes.EvtCleanupCallback = KeyboardFilter_OnKeyboardDisconnect;
 
-	//
 	// Create a framework device object. This call will in turn create
 	// a WDM deviceobject, attach to the lower stack and set the
 	// appropriate flags and attributes.
-	//
 	WDFDEVICE hDevice;
 	status = WdfDeviceCreate(&DeviceInit, &deviceAttributes, &hDevice);
 	if (!NT_SUCCESS(status)) {
@@ -106,22 +96,19 @@ NTSTATUS KeyboardFilter_EvtDeviceAdd(IN WDFDRIVER Driver, IN PWDFDEVICE_INIT Dev
 
 	PDEVICE_EXTENSION filterExt;
 	filterExt = GetContextFromDevice(hDevice);
+	filterExt->WdfDevice = hDevice;
 
-	//
 	// Configure the default queue to be Parallel. Do not use sequential queue
 	// if this driver is going to be filtering PS2 ports because it can lead to
 	// deadlock. The PS2 port driver sends a request to the top of the stack when it
 	// receives an ioctl request and waits for it to be completed. If you use a
 	// sequential queue, this request will be stuck in the queue because of the
 	// outstanding ioctl request sent earlier to the port driver.
-	//
 	WDF_IO_QUEUE_CONFIG ioQueueConfig;
 	WDF_IO_QUEUE_CONFIG_INIT_DEFAULT_QUEUE(&ioQueueConfig, WdfIoQueueDispatchParallel);
 
-	//
 	// Framework by default creates a non-power managed queues for
 	// filter drivers
-	//
 	ioQueueConfig.EvtIoInternalDeviceControl = KeyboardFilter_EvtIoInternalDeviceControl;
 	
 
@@ -131,7 +118,8 @@ NTSTATUS KeyboardFilter_EvtDeviceAdd(IN WDFDRIVER Driver, IN PWDFDEVICE_INIT Dev
 		return status;
 	}
 
-	//
+	// Initialize the MacroManager class for this device
+	filterExt->MacroManager = new MacroManager();
 
 	return status;
 }
@@ -140,8 +128,6 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 	UNREFERENCED_PARAMETER(OutputBufferLength);
 	UNREFERENCED_PARAMETER(InputBufferLength);
 	PAGED_CODE();
-
-	// KdPrint(("[KB] EvtIoInternalDeviceControl"));
 
 	WDFDEVICE hDevice;
 	PDEVICE_EXTENSION devExt;
@@ -162,18 +148,14 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 
 	case IOCTL_INTERNAL_KEYBOARD_CONNECT:
 	{
-		//
 		// Only allow one connection
-		//
 		if (devExt->UpperConnectData.ClassService != NULL) {
 			status = STATUS_SHARING_VIOLATION;
 			break;
 		}
 
-		//
 		// Get the input buffer from the request
 		// (Parameters.DeviceIoControl.Type3InputBuffer)
-		//
 		status = WdfRequestRetrieveInputBuffer(Request, sizeof(CONNECT_DATA), (PVOID*)&connectData, &length);
 		if (!NT_SUCCESS(status)) {
 			KdPrint(("[KB] WdfRequestRetrieveInputBuffer failed with error code 0x%x\n", status));
@@ -184,15 +166,11 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 
 		devExt->UpperConnectData = *connectData;
 
-		//
 		// Asign a DeviceID
-		//
 		devExt->DeviceID = nextUserDeviceID++;
 
-		//
 		// Hook into the report chain. Everytime a keyboard packet is reported
 		// to the system, KeyboardFilter_ServiceCallback will be called
-		//
 
 		connectData->ClassDeviceObject = WdfDeviceWdmGetDeviceObject(hDevice);
 
@@ -202,39 +180,15 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 
 #pragma warning(default:4152)
 
-		//
 		// Add device extension to our global keyboard manager
-		//
 		HASH_ADD(hh, _keyboards, DeviceID, sizeof(DWORD), devExt);
 
 		break;
 	}
 	case IOCTL_INTERNAL_KEYBOARD_DISCONNECT:
 	{
-		//
-		// Clear the connection parameters in the device extension.
-		//
-		devExt->UpperConnectData.ClassDeviceObject = NULL;
-		devExt->UpperConnectData.ClassService = NULL;
-
-		//
-		// Remove device extension from keyboards hash table
-		//
-		PDEVICE_EXTENSION devExtHashSearch;
-		DWORD devExtHashID = devExt->DeviceID;
-#pragma warning(disable:4127)
-		HASH_FIND(hh, _keyboards, &devExtHashID, sizeof(DWORD), devExtHashSearch);
-#pragma warning(default:4127)
-		if (devExtHashSearch != NULL) {
-			HASH_DEL(_keyboards, devExtHashSearch);
-			KdPrint(("[KB] Deleted device extension from keyboards hash table\n"));
-		}
-
-		//
-		// Delete the created WdfDevice
-		//
-		WdfObjectDelete(devExt->WdfDevice);
-
+		KdPrint(("[KB] IOCTL_INTERNAL_KEYBOARD_DISCONNECT called\n"));
+		status = STATUS_NOT_IMPLEMENTED;
 		break;
 	}
 	case IOCTL_KEYBOARD_QUERY_ATTRIBUTES:
@@ -243,11 +197,9 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 		completionContext = devExt;
 		break;
 
-		//
 		// Might want to capture these in the future. For now, then pass them down
 		// the stack. These queries must be successful for the RIT to communicate
 		// with the keyboard.
-		//
 	}
 	case IOCTL_KEYBOARD_QUERY_INDICATOR_TRANSLATION:
 	case IOCTL_KEYBOARD_QUERY_INDICATORS:
@@ -262,17 +214,13 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 		return;
 	}
 
-	//
 	// Forward the request down. WdfDeviceGetIoTarget returns
 	// the default target, which represents the device attached
 	// to us below in the stack
-	//
 
 	if (forwardWithCompletionRoutine) {
-		//
 		// Format the request with the output memory so the completion routine
 		// can access the return data in order to cache it into the context area
-		//
 		status = WdfRequestRetrieveOutputMemory(Request, &outputMemory);
 
 		if (!NT_SUCCESS(status)) {
@@ -289,10 +237,8 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 			return;
 		}
 
-		//
 		// Set our completion routine with a context area
 		// that we will save the output data into
-		//
 		WdfRequestSetCompletionRoutine(Request, KeyboardFilterRequestCompletionRoutine, completionContext);
 
 		ret = WdfRequestSend(Request, WdfDeviceGetIoTarget(hDevice), WDF_NO_SEND_OPTIONS);
@@ -304,10 +250,8 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 		}
 	}
 	else {
-		//
 		// We are not interested in post processing the IRP so
 		// fire and forget.
-		//
 		WDF_REQUEST_SEND_OPTIONS_INIT(&options, WDF_REQUEST_SEND_OPTION_SEND_AND_FORGET);
 
 		ret = WdfRequestSend(Request, WdfDeviceGetIoTarget(hDevice), &options);
@@ -321,6 +265,33 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 
 	return;
 }
+
+
+VOID KeyboardFilter_OnKeyboardDisconnect (_In_ WDFOBJECT Object) {
+
+	WDFDEVICE device = (WDFDEVICE)Object;
+	PDEVICE_EXTENSION devExt = GetContextFromDevice(device);
+
+	// Clear the connection parameters in the device extension.
+	devExt->UpperConnectData.ClassDeviceObject = NULL;
+	devExt->UpperConnectData.ClassService = NULL;
+
+	// Remove device extension from keyboards hash table
+	PDEVICE_EXTENSION devExtHashSearch;
+	DWORD devExtHashID = devExt->DeviceID;
+#pragma warning(disable:4127)
+	HASH_FIND(hh, _keyboards, &devExtHashID, sizeof(DWORD), devExtHashSearch);
+#pragma warning(default:4127)
+	if (devExtHashSearch != NULL) {
+		HASH_DEL(_keyboards, devExtHashSearch);
+		KdPrint(("[KB] Deleted device extension from keyboards hash table\n"));
+	}
+
+	// Delete the MacroManager
+	delete ((MacroManager*) (devExt->MacroManager));
+
+}
+
 
 
 
@@ -360,6 +331,7 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 
 	PDEVICE_EXTENSION devExt;
 	devExt = GetContextFromDevice(WdfDevice);
+	MacroManager* macroManager = (MacroManager*)devExt->MacroManager;
 
 #ifdef KEYBOARDFILTER_IS_OLD_VERSION
 
@@ -369,9 +341,7 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 	WDFREQUEST notifyRequest;
 	PVOID  bufferPointer;
 
-	//
 	// ControlDevice not yet initialized, process keyboard input normally
-	//
 	if (ControlDevice == NULL) {
 		KdPrint(("[KB] No ControlDevice found, passing packets normally\n"));
 		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
@@ -380,13 +350,9 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 	}
 	InvertedDeviceContext = InvertedGetContextFromDevice(ControlDevice);
 
-	//KdPrint(("[KB] Input from device: %u; %u\n", devExt->KeyboardAttributes.KeyboardIdentifier.Type, devExt->KeyboardAttributes.KeyboardIdentifier.Subtype));
-
 	NTSTATUS queueAvailable = WdfIoQueueRetrieveNextRequest(InvertedDeviceContext->NotificationQueue, &notifyRequest);
 
-	//
 	// No queue available, process keyboard input normally
-	//
 	if (!NT_SUCCESS(queueAvailable)) {
 		KdPrint(("[KB] No queue available, passing packets normally"));
 		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
@@ -394,13 +360,9 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 		return;
 	}
 
-	//KdPrint(("[KB] Got a queue\n"));
-
-	//
 	// Get a pointer to the output buffer that was passed-in with the user
 	// notification IOCTL. We'll use this to return additional info about
 	// the event.
-	//
 	size_t bufferSize;
 	queueAvailable = WdfRequestRetrieveOutputBuffer(notifyRequest, sizeof(CUSTOM_KEYBOARD_INPUT), (PVOID*)&bufferPointer, &bufferSize);
 	if (!NT_SUCCESS(queueAvailable)) {
@@ -420,11 +382,9 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 	PCUSTOM_KEYBOARD_INPUT dataToReturn;
 	WDFMEMORY dataToReturnMemory;
 
-	//
 	// Create local buffer to init the data that will be sent
 	// to the app running in user mode.
 	// Process keys normally if it fails
-	// 
 	NTSTATUS memoryAllocStatus = WdfMemoryCreate(WDF_NO_OBJECT_ATTRIBUTES, NonPagedPool, 0, bufferSize, &dataToReturnMemory, &dataToReturn);
 	if (!NT_SUCCESS(memoryAllocStatus)) {
 		KdPrint(("[KB] Fail to allocate memory for local buffer"));
@@ -433,17 +393,13 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 		return;
 	}
 
-	//
 	// Loop through key presses to construct an array of CUSTOM_KEYBOARD_INPUT
 	// which will be then sent to the app through IOCTL
-	//
 	int i;
 	for (pCur = InputDataStart, i = 0; pCur < InputDataEnd; pCur++, i++) {
 
-		//
 		// If there is no space left in the buffer, then process the rest of the input normally
 		// TODO: Loop through IOCTL queue until all data is sent
-		//
 		if (i >= bufferSize / sizeof(CUSTOM_KEYBOARD_INPUT)) {
 			KdPrint(("[KB] Buffer size overrun\n"));
 			ULONG consumed = 0;
@@ -459,19 +415,13 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 		dataToReturn[i].MakeCode = pCur->MakeCode;
 	}
 
-	//
 	// Copy local buffer into output buffer
-	//
 	RtlCopyMemory(bufferPointer, dataToReturn, bufferSize);
 
-	//
 	// Delete local buffer
-	//
 	WdfObjectDelete(dataToReturnMemory);
 
-	//
 	// Return data
-	//
 	QueueReturnStatus = STATUS_SUCCESS;
 	info = i * sizeof(CUSTOM_KEYBOARD_INPUT);
 	WdfRequestCompleteWithInformation(notifyRequest, QueueReturnStatus, info);
@@ -480,7 +430,54 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 
 	// Notify END
 #else
-	(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
+
+	PKEYBOARD_INPUT_DATA pCur;
+
+	for (pCur = InputDataStart; pCur < InputDataEnd; pCur++) {
+		PKB_MACRO_HASHVALUE macro = macroManager->getMacro(pCur->MakeCode);
+		ULONG consumed = 0;
+
+		// If there is no macro for this key, process the key normally
+		if (macro == NULL) {
+			(*(PSERVICE_CALLBACK_ROUTINE)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, pCur, pCur + 1, &consumed);
+			continue;
+		}
+
+		// If key is not KEY DOWN but there is a macro on this key, skip execution at all
+		if (pCur->Flags != KEY_MAKE) {
+			continue;
+		}
+
+		// Allocate memory for replacing keys
+		PKEYBOARD_INPUT_DATA MacroData = (PKEYBOARD_INPUT_DATA) ExAllocatePoolWithTag(NonPagedPool, macro->NewKeysLength * sizeof(KEYBOARD_INPUT_DATA), KBFLTR_KP_TAG);
+
+		// If memory allocation fails, execute the key press normally
+		if (MacroData == NULL) {
+			KdPrint(("[KB] Failed to allocate memory for macro keys\n"));
+			(*(PSERVICE_CALLBACK_ROUTINE)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, pCur, pCur + 1, &consumed);
+			continue;
+		}
+
+		// Create KEYBOARD_INPUT_DATA objects that we can pass down the stack
+		for (int i = 0; i < macro->NewKeysLength; i++) {
+			MacroData[i].UnitId = pCur->UnitId;
+			MacroData[i].Reserved = pCur->Reserved;
+			MacroData[i].ExtraInformation = pCur->ExtraInformation;
+			MacroData[i].MakeCode = macro->NewKeys[i].MakeCode;
+			MacroData[i].Flags = macro->NewKeys[i].Flags;
+		}
+
+		// Pass the replacing keys down the stack
+		(*(PSERVICE_CALLBACK_ROUTINE)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, MacroData, MacroData + macro->NewKeysLength, &consumed);
+
+		// Free the memory allocated for replacing keys
+		ExFreePoolWithTag(MacroData, KBFLTR_KP_TAG);
+
+	}
+
+	*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
+
+	//(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
 #endif
 }
 
@@ -511,10 +508,8 @@ VOID KeyboardFilterRequestCompletionRoutine(WDFREQUEST Request, WDFIOTARGET Targ
 	NTSTATUS status = CompletionParams->IoStatus.Status;
 	PDEVICE_EXTENSION devExt = (PDEVICE_EXTENSION)Context;
 
-	//
 	// Save the keyboard attributes in our context area
 	// so that we can return them to the app later
-	//
 
 	if (NT_SUCCESS(status) && CompletionParams->Type == WdfRequestTypeDeviceControlInternal && CompletionParams->Parameters.Ioctl.IoControlCode == IOCTL_KEYBOARD_QUERY_ATTRIBUTES) {
 		if (CompletionParams->Parameters.Ioctl.Output.Length >= sizeof(KEYBOARD_ATTRIBUTES)) {
@@ -529,61 +524,32 @@ VOID KeyboardFilterRequestCompletionRoutine(WDFREQUEST Request, WDFIOTARGET Targ
 	return;
 }
 
-/**
-* Get's a WdfDevice object from a driver-generated DeviceID
-*/
-WDFDEVICE KBFLTR_GetDeviceByCustomID(WDFDRIVER WdfDriver, DWORD DeviceID) {
+/// <summary>
+/// Get's a WdfDevice object from a driver-generated DeviceID
+/// </summary>
+/// <param name="DeviceID">
+/// The ID of the device we need
+/// </param>
+/// <returns>
+/// WDFDEVICE if a device was found using specified DeviceID, NULL otherwise
+/// </returns>
+WDFDEVICE KBFLTR_GetDeviceByCustomID(DWORD DeviceID) {
 
-	PDRIVER_OBJECT WdmDriver = WdfDriverWdmGetDriverObject(WdfDriver);
-
-	//
-	// Get the first device from the list (created by our driver)
-	//
-	PDEVICE_OBJECT currDevice = WdmDriver->DeviceObject;
-
-	LARGE_INTEGER startTime, endTime;
-	KeQuerySystemTimePrecise(&startTime);
+	// Search for the device in the hash
 	PDEVICE_EXTENSION devExtHashSearch;
 #pragma warning(disable:4127)
 	HASH_FIND(hh, _keyboards, &DeviceID, sizeof(DWORD), devExtHashSearch);
 #pragma warning(default:4127)
-	KeQuerySystemTimePrecise(&endTime);
-	LONGLONG totalTime = endTime.QuadPart - startTime.QuadPart;
 
-	KeQuerySystemTimePrecise(&startTime);
-	while (currDevice != NULL) {
+	// Return the device if found, else return NULL
+	if (devExtHashSearch == NULL) return NULL;
+	return devExtHashSearch->WdfDevice;
+}
 
-		//
-		// Get WdfDevice and the device extension associated 
-		// with the PDEVICE_OBJECT of current device
-		//
-		WDFDEVICE WdfDevice = WdfWdmDeviceGetWdfDeviceHandle(currDevice);
-		PDEVICE_EXTENSION devExt = GetContextFromDevice(WdfDevice);
-
-		//
-		// If devExt is NULL it means the device has a different type
-		// of device context (in this case, it means that it would be
-		// our DeviceControl as it's context type is INVERTED_DEVICE_CONTEXT).
-		// We want to loop just through keyboards with context type
-		// of DEVICE_EXTENSION
-		//
-		if (devExt != NULL) {
-			if (devExt->DeviceID == DeviceID || DeviceID == 0) {
-				KeQuerySystemTimePrecise(&endTime);
-				LONGLONG newTotalTime = endTime.QuadPart - startTime.QuadPart;
-				KdPrint(("[KB] DeviceID: %u, HashTable time: %I64d, Array loop time: %I64d\n", DeviceID, totalTime, newTotalTime));
-				return WdfDevice;
-			}
-		}
-
-		//
-		// Device not found, skip to the next one
-		//
-		currDevice = currDevice->NextDevice;
-	}
-
-	//
-	// Device not found, return NULL
-	//
-	return NULL;
+/// <summary>
+/// Get number of devices(keyboards) that supports macros
+/// </summary>
+/// <returns></returns>
+size_t KBFLTR_GetNumberOfKeyboards() {
+	return HASH_COUNT(_keyboards);
 }

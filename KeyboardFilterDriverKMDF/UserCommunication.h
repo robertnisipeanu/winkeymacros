@@ -1,6 +1,8 @@
 #pragma once
 #include "Driver.h"
 
+#define KBFLTR_USR_TAG 'Kusr'
+
 NTSTATUS UserCommunication_RegisterControlDevice(WDFDRIVER WdfDriver);
 
 extern "C" {

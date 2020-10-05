@@ -167,6 +167,7 @@
   <ItemGroup>
     <ClInclude Include="Driver.h" />
     <ClInclude Include="MacroManager.h" />
+    <ClInclude Include="operators.h" />
     <ClInclude Include="shared.h" />
     <ClInclude Include="stdint.h" />
     <ClInclude Include="UserCommunication.h" />
@@ -175,7 +176,11 @@
   <ItemGroup>
     <ClCompile Include="Driver.cpp" />
     <ClCompile Include="MacroManager.cpp" />
+    <ClCompile Include="operators.cpp" />
     <ClCompile Include="UserCommunication.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="cpp.hint" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

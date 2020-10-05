@@ -12,14 +12,14 @@
 
 typedef struct _OVL_WRAPPER {
     OVERLAPPED  Overlapped;
-    CUSTOM_KEYBOARD_INPUT        ReturnedSequence;
+    //CUSTOM_KEYBOARD_INPUT        ReturnedSequence;
 } OVL_WRAPPER, * POVL_WRAPPER;
 
 //moodycamel::BlockingConcurrentQueue<CUSTOM_KEYBOARD_INPUT> q;
 
 DWORD WINAPI CompletionPortThread(LPVOID PortHandle);
 
-void openAsyncIo(HANDLE *handle) {
+/*void openAsyncIo(HANDLE *handle) {
     DWORD code;
 
     if (handle == INVALID_HANDLE_VALUE || handle == NULL) {
@@ -55,7 +55,7 @@ void openAsyncIo(HANDLE *handle) {
 
     free(rawInput);
 
-}
+}*/
 
 void startConnectionHandle(DWORD dwThreadId, HANDLE* handle) {
     DWORD code;
@@ -71,7 +71,7 @@ void startConnectionHandle(DWORD dwThreadId, HANDLE* handle) {
 
 HANDLE driverHandle;
 
-DWORD openIoctl() {
+/*DWORD openIoctl() {
 
     if (driverHandle == NULL || driverHandle == INVALID_HANDLE_VALUE) {
         std::cout << "Invalid handle" << std::endl;
@@ -91,7 +91,7 @@ DWORD openIoctl() {
         return(code);
 
     }
-}
+}*/
 
 int main()
 {
@@ -142,34 +142,33 @@ int main()
 
     std::cout << "Started to listen for keys, main thread id: " << GetCurrentThreadId() << std::endl;
 
-    for (int i = 0; i < 100; i++) {
-        openIoctl();
-    }
+    INPUT_KEYBOARD_MACRO keyboard, keyboard2;
+    memset(&keyboard, 0, sizeof(INPUT_KEYBOARD_MACRO));
+    memset(&keyboard2, 0, sizeof(INPUT_KEYBOARD_MACRO));
+    keyboard.DeviceID = 1;
+    keyboard.ReplacedKeyScanCode = 0x1e;
 
-    // Convert to byte
-    int32_t intVal = 27;
-    CUSTOM_KEYBOARD_INPUT test;
-    test.DeviceID = 1;
-    test.UnitId = 2;
-    test.MakeCode = 3;
-    test.ExtraInformation = 4;
-    test.Flags = 5;
-    test.Reserved = 6;
+    INPUT_KEYBOARD_KEY replacingKeys[8];
+    replacingKeys[0].MakeCode = 0x14; replacingKeys[0].Flags = RI_KEY_MAKE;
+    replacingKeys[1].MakeCode = 0x14; replacingKeys[1].Flags = RI_KEY_BREAK;
+    replacingKeys[2].MakeCode = 0x12; replacingKeys[2].Flags = RI_KEY_MAKE;
+    replacingKeys[3].MakeCode = 0x12; replacingKeys[3].Flags = RI_KEY_BREAK;
+    replacingKeys[4].MakeCode = 0x1f; replacingKeys[4].Flags = RI_KEY_MAKE;
+    replacingKeys[5].MakeCode = 0x1f; replacingKeys[5].Flags = RI_KEY_BREAK;
+    replacingKeys[6].MakeCode = 0x14; replacingKeys[6].Flags = RI_KEY_MAKE;
+    replacingKeys[7].MakeCode = 0x14; replacingKeys[7].Flags = RI_KEY_BREAK;
 
+    size_t bufferSize = sizeof(INPUT_KEYBOARD_MACRO) + (8 * sizeof(INPUT_KEYBOARD_KEY));
 
-    unsigned char* bytePointer = (unsigned char*) malloc(sizeof(CUSTOM_KEYBOARD_INPUT) + sizeof(int32_t));
-    memcpy(bytePointer, &test, sizeof(CUSTOM_KEYBOARD_INPUT));
-    memcpy(bytePointer + sizeof(CUSTOM_KEYBOARD_INPUT), &intVal, sizeof(int32_t));
+    unsigned char* bytePointer = (unsigned char*)malloc(bufferSize);
+    memcpy(bytePointer, &keyboard, sizeof(INPUT_KEYBOARD_MACRO));
+    memcpy(bytePointer + sizeof(INPUT_KEYBOARD_MACRO), replacingKeys, 8 * sizeof(INPUT_KEYBOARD_KEY));
 
-    // Convert from byte
-    int32_t intVal2;
-    CUSTOM_KEYBOARD_INPUT test2;
-    memcpy(&test2, bytePointer, sizeof(CUSTOM_KEYBOARD_INPUT));
-    memcpy(&intVal2, bytePointer + sizeof(CUSTOM_KEYBOARD_INPUT), sizeof(int32_t));
-    std::cout << test2.DeviceID << " " << test2.UnitId << " " << test2.MakeCode << " " << test2.ExtraInformation << " " << test2.Flags << " " << test2.Reserved << " " << intVal2;
+    memcpy(&keyboard2, bytePointer, sizeof(INPUT_KEYBOARD_MACRO));
 
+    std::cout << keyboard2.DeviceID << " " << keyboard2.ReplacedKeyScanCode << std::endl;
 
-    DeviceIoControl(driverHandle, static_cast<DWORD>(IOCTL_KEYBOARDFILTER_ADDMACRO), bytePointer, sizeof(CUSTOM_KEYBOARD_INPUT) + sizeof(int32_t), NULL, 0, NULL, NULL);
+    DeviceIoControl(driverHandle, static_cast<DWORD>(IOCTL_KEYBOARDFILTER_ADDMACRO), bytePointer, bufferSize, NULL, 0, NULL, NULL);
 
     free(bytePointer);
 
@@ -199,7 +198,7 @@ DWORD WINAPI CompletionPortThread(LPVOID PortHandle) {
             continue;
         }
 
-        wrap = reinterpret_cast<POVL_WRAPPER>(overlapped);
+        /*wrap = reinterpret_cast<POVL_WRAPPER>(overlapped);
         code = GetLastError();
 
         wrap->ReturnedSequence.MakeCode = 30;
@@ -211,6 +210,6 @@ DWORD WINAPI CompletionPortThread(LPVOID PortHandle) {
             }
         }
 
-        openIoctl();
+        openIoctl();*/
     }
 }
