@@ -552,3 +552,45 @@ WDFDEVICE KBFLTR_GetDeviceByCustomID(DWORD DeviceID) {
 size_t KBFLTR_GetNumberOfKeyboards() {
 	return HASH_COUNT(_keyboards);
 }
+
+/// <summary>
+/// Get the list of devices(keyboards) that supports macros
+/// </summary>
+/// <param name="buffer">
+/// OUT - Buffer where array of CUSTOM_KEYBOARD_INFO is gonna be stored
+/// </param>
+/// <param name="maxKeyboards">
+/// Max number of keyboards that can be stored in the provided buffer
+/// </param>
+/// <param name="keyboardsNumberOutput">
+/// OUT - Pointer to a size_t object which will get how many CUSTOM_KEYBOARD_INFO objects was copied into the buffer
+/// </param>
+void KBFLTR_GetKeyboardsInfo(PCUSTOM_KEYBOARD_INFO buffer, size_t maxKeyboards, size_t* keyboardsNumberOutput) {
+
+	*keyboardsNumberOutput = 0;
+	PDEVICE_EXTENSION s, tmp;
+
+	HASH_ITER(hh, _keyboards, s, tmp) {
+
+		// If there is no more space in the buffer, return
+		if (maxKeyboards >= *keyboardsNumberOutput) {
+			return;
+		}
+
+		// Create the current keyboard info item and populate with data
+		CUSTOM_KEYBOARD_INFO sInfo;
+
+		sInfo.DeviceID = s->DeviceID;
+		sInfo.NumberOfFunctionKeys = s->KeyboardAttributes.NumberOfFunctionKeys;
+		sInfo.NumberOfIndicators = s->KeyboardAttributes.NumberOfIndicators;
+		sInfo.NumberOfKeysTotal = s->KeyboardAttributes.NumberOfKeysTotal;
+		
+		// Copy the current keyboard info item into buffer
+		RtlCopyMemory(&sInfo, buffer + *keyboardsNumberOutput, sizeof(CUSTOM_KEYBOARD_INFO));
+
+		// Increase the number of copied items
+		*keyboardsNumberOutput += 1;
+
+	}
+
+}

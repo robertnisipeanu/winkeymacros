@@ -75,6 +75,7 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 
 WDFDEVICE KBFLTR_GetDeviceByCustomID(DWORD DeviceID);
 size_t KBFLTR_GetNumberOfKeyboards();
+void KBFLTR_GetKeyboardsInfo(PCUSTOM_KEYBOARD_INFO buffer, size_t maxKeyboards, size_t* keyboardsNumberOutput);
 
 extern "C" {
 	DRIVER_INITIALIZE DriverEntry;
