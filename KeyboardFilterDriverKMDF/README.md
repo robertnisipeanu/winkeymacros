@@ -54,8 +54,17 @@ Output:
 
 ### IOCTL_KEYBOARDFILTER_ADDMACRO
 Input:
+- input buffer is composed of:
+	- an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key on which to add the macro
+	- with an offset of `sizeof(INPUT_KEYBOARD_MACRO)` (so immediatly after the INPUT_KEYBOARD_MACRO structure) it needs to be an array of INPUT_KEYBOARD_KEYs that represent the replacing keys for the macro
+	- If there is nothing after the INPUT_KEYBOARD_MACRO the driver is gonna assume that you want to disable the key from INPUT_KEYBOARD_MACRO, so that key would become useless until the macro is replaced/deleted or system reboots
 
 Output:
+- NO OUTPUT
+
+
+Return status:
+- `STATUS_SUCCESS` -> Macro was added successfully
 
 ### IOCTL_KEYBOARDFILTER_ISMACRO
 Input:
@@ -68,6 +77,7 @@ Output:
 Return status:
 - `STATUS_SUCCESS` -> If a keyboard was found, no matter if there is a macro or not on that key
 - `STATUS_NOT_FOUND` -> Keyboard was not found
+- `STATUS_GENERIC_COMMAND_FAILED` -> Failed to allocate memory for the macro in hashtable
 
 ### IOCTL_KEYBOARDFILTER_DELETEMACRO
 Input:

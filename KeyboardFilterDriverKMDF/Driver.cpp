@@ -196,11 +196,10 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 		forwardWithCompletionRoutine = TRUE;
 		completionContext = devExt;
 		break;
-
-		// Might want to capture these in the future. For now, then pass them down
-		// the stack. These queries must be successful for the RIT to communicate
-		// with the keyboard.
 	}
+	// Might want to capture these in the future. For now, then pass them down
+	// the stack. These queries must be successful for the RIT to communicate
+	// with the keyboard.
 	case IOCTL_KEYBOARD_QUERY_INDICATOR_TRANSLATION:
 	case IOCTL_KEYBOARD_QUERY_INDICATORS:
 	case IOCTL_KEYBOARD_SET_INDICATORS:
