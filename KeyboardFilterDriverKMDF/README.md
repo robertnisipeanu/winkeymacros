@@ -33,7 +33,7 @@ If you want to see an example of how to call the IOCTLs, then look at the LowLev
 
 Common return status codes (you can get them from any of the below listed IOCTLs):
 - `STATUS_INVALID_BUFFER_SIZE` -> Input buffer or output buffer are too small
-- Any status returned by WdfRequestRetrieveInputBuffer, WdfRequestRetrieveOutputBuffer, WdfMemoryCopyToBuffer
+- Any status returned by `WdfRequestRetrieveInputBuffer`, `WdfRequestRetrieveOutputBuffer`, `WdfMemoryCopyToBuffer`
 
 ### IOCTL_KEYBOARDFILTER_GETKEYBOARDSLENGTH
 Input:
@@ -80,7 +80,7 @@ Return status:
 Input:
 - input buffer needs to be an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key you want to get the macro of
 Output:
-- output buffer needs to be `macroLength * sizeof(INPUT_BUFFER_KEY)` (first call IOCTL_KEYBOARDFILTER_GETMACROLENGTH to get the macroLength), it returns an array of INPUT_KEYBOARD_KEY which is the replacing keys sequence of the macro
+- output buffer needs to be `macroLength * sizeof(INPUT_BUFFER_KEY)` (first call `IOCTL_KEYBOARDFILTER_GETMACROLENGTH` to get the macroLength), it returns an array of INPUT_KEYBOARD_KEY which is the replacing keys sequence of the macro
 
 Return status:
 - `STATUS_SUCCESS` -> Replacing keys sequence successfully returned
