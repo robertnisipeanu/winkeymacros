@@ -26,6 +26,13 @@ If you want to develop something on top of this driver, then what you're interes
 If something is missing from here, please feel free to add a PR modifying this README.md or a issue specifying what is missing.
 If you do not know how communication with a driver works and what is a IOCTL, then please use the LowLevelKeyboard library that implements this communication and is supposed to be easier to use (the driver still needs to be installed for the library to work, the library just acts as an API for the communication so you do not have to do it yourself).
 
+## How long is a macro stored?
+Each time a keyboard gets plugged in, the driver allocates an auto-incrementing `DWORD` DeviceID to it. The driver uses the DeviceID to store the macros for the keyboard. 
+If a keyboard is being reconnected (disconnected and then connected again), it will reallocate a new DeviceID to it, so every macro stored in the driver would be lost. 
+Because the DeviceID is a variable, it's gonna reset at every system boot (first value is 1). 
+There is no way that two keyboards gets the same DeviceID in a single system uptime period, once a keyboard is disconnected, that DeviceID won't be allocated to any other keyboards connected after (not even to the same keyboard if it's reconnected). 
+To make the macros persistent, you need to store the macros in your own app and identify devices(and add the macros to them) based on other non-changing(or rarely changing) properties of the keyboard(use your imagination, it can be anything, like the device HID, vendor id, product id and so on).
+
 ## IOCTLs
 
 An app can communicate with the driver using IOCTLs. I will explain bellow what every IOCTL does and what parameters it needs. This documentation doesn't shows you how to call an IOCTL in your app, but what every IOCTL does.
