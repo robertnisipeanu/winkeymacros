@@ -236,7 +236,6 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			// Retrieve output buffer
 			status = WdfRequestRetrieveOutputBuffer(Request, sizeof(size_t), (PVOID*)&bufferPointer, NULL);
 			if (!NT_SUCCESS(status)) {
-				status = STATUS_NOT_COMMITTED;
 				info = 0;
 				break;
 			}
@@ -347,7 +346,7 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			}
 
 			// Retrieve input buffer
-			PINPUT_KEYBOARD_MACRO *inputBuffer;
+			PINPUT_KEYBOARD_MACRO inputBuffer;
 
 			status = WdfRequestRetrieveInputBuffer(Request, sizeof(INPUT_KEYBOARD_MACRO), (PVOID*) &inputBuffer, NULL);
 			if (!NT_SUCCESS(status)) {
@@ -366,12 +365,12 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			// Retrieve output buffer
 			status = WdfRequestRetrieveOutputBuffer(Request, sizeof(BOOLEAN), (PVOID*)&bufferPointer, NULL);
 			if (!NT_SUCCESS(status)) {
-				status = STATUS_SUCCESS;
+				KdPrint(("[KB] Failed to retrieve output buffer\n"));
 				break;
 			}
 
 			// Get the device from the DeviceID
-			WDFDEVICE device = KBFLTR_GetDeviceByCustomID((*inputBuffer)->DeviceID);
+			WDFDEVICE device = KBFLTR_GetDeviceByCustomID(inputBuffer->DeviceID);
 			if (device == NULL) {
 				KdPrint(("[KB] Device not found\n"));
 				status = STATUS_NOT_FOUND;
@@ -383,7 +382,7 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			MacroManager* macroManager = (MacroManager*) devExt->MacroManager;
 
 			// Check if there is a macro on the specified key and return
-			*bufferPointer = macroManager->isMacro((*inputBuffer)->ReplacedKeyScanCode);
+			*bufferPointer = macroManager->isMacro(inputBuffer->ReplacedKeyScanCode);
 			info = sizeof(BOOLEAN);
 
 			status = STATUS_SUCCESS;
@@ -399,7 +398,7 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			}
 
 			// Retrieve input buffer
-			PINPUT_KEYBOARD_MACRO* inputBuffer;
+			PINPUT_KEYBOARD_MACRO inputBuffer;
 			
 			status = WdfRequestRetrieveInputBuffer(Request, sizeof(INPUT_KEYBOARD_MACRO), (PVOID*)&inputBuffer, NULL);
 			if (!NT_SUCCESS(status)) {
@@ -408,7 +407,7 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			}
 
 			// Get the device from the DeviceID
-			WDFDEVICE device = KBFLTR_GetDeviceByCustomID((*inputBuffer)->DeviceID);
+			WDFDEVICE device = KBFLTR_GetDeviceByCustomID(inputBuffer->DeviceID);
 			if (device == NULL) {
 				KdPrint(("[KB] Device not found\n"));
 				status = STATUS_NOT_FOUND;
@@ -420,13 +419,72 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			MacroManager* macroManager = (MacroManager*)devExt->MacroManager;
 
 			// Delete the macro for that key
-			macroManager->deleteMacro((*inputBuffer)->ReplacedKeyScanCode);
+			macroManager->deleteMacro(inputBuffer->ReplacedKeyScanCode);
 
 			status = STATUS_SUCCESS;
 			break;
 		}
 		case IOCTL_KEYBOARDFILTER_GETMACRO: {
-			status = STATUS_NOT_IMPLEMENTED;
+
+			// INPUT_KEYBOARD_MACRO is required
+			if (InputBufferLength < sizeof(INPUT_KEYBOARD_MACRO)) {
+				KdPrint(("[KB] InputBufferLength is too small\n"));
+				status = STATUS_INVALID_BUFFER_SIZE;
+				break;
+			}
+
+			// Retrieve input buffer
+			PINPUT_KEYBOARD_MACRO inputBuffer;
+
+			status = WdfRequestRetrieveInputBuffer(Request, sizeof(INPUT_KEYBOARD_MACRO), (PVOID*)&inputBuffer, NULL);
+			if (!NT_SUCCESS(status)) {
+				KdPrint(("[KB] Failed to retrieve input buffer\n"));
+				break;
+			}
+
+			// Get the device from the DeviceID
+			WDFDEVICE device = KBFLTR_GetDeviceByCustomID(inputBuffer->DeviceID);
+			if (device == NULL) {
+				KdPrint(("[KB] Device not found\n"));
+				status = STATUS_NOT_FOUND;
+				break;
+			}
+
+			// Get the device macro manager
+			PDEVICE_EXTENSION devExt = GetContextFromDevice(device);
+			MacroManager* macroManager = (MacroManager*)devExt->MacroManager;
+
+			// If there is no macro for that key, return STATUS_NO_MATCH
+			if (!macroManager->isMacro(inputBuffer->ReplacedKeyScanCode)) {
+				status = STATUS_NO_MATCH;
+				break;
+			}
+
+			// Get the macro
+			PKB_MACRO_HASHVALUE macro = macroManager->getMacro(inputBuffer->ReplacedKeyScanCode);
+
+			size_t neededBufferLength = macro->NewKeysLength * sizeof(INPUT_KEYBOARD_KEY);
+
+			// If output buffer is not big enough, return
+			if (OutputBufferLength < neededBufferLength) {
+				KdPrint(("[KB] OutputBufferLength is too small\n"));
+				status = STATUS_BUFFER_TOO_SMALL;
+				break;
+			}
+
+			// Retrieve output buffer
+			PINPUT_KEYBOARD_KEY bufferPointer;
+			status = WdfRequestRetrieveOutputBuffer(Request, neededBufferLength, (PVOID*)&bufferPointer, NULL);
+			if (!NT_SUCCESS(status)) {
+				KdPrint(("[KB] Failed to retrieve output buffer\n"));
+				break;
+			}
+
+			// Copy replacing keys into output buffer
+			RtlCopyMemory(bufferPointer, macro->NewKeys, neededBufferLength);
+			info = neededBufferLength;
+
+			status = STATUS_SUCCESS;
 			break;
 		}
 		case IOCTL_KEYBOARDFILTER_GETMACROLENGTH: {
@@ -477,12 +535,13 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			// If there is no macro for that key, return 0
 			// otherwise return how many INPUT_KEYBOARD_KEY objects are stored for that macro
 			if (!macroManager->isMacro((*inputBuffer)->ReplacedKeyScanCode)) {
-				*bufferPointer = 0;
+				KdPrint(("[KB] Macro not found"));
+				status = STATUS_NO_MATCH;
+				break;
 			}
-			else {
-				PKB_MACRO_HASHVALUE macro = macroManager->getMacro((*inputBuffer)->ReplacedKeyScanCode);
-				*bufferPointer = macro->NewKeysLength;
-			}
+
+			PKB_MACRO_HASHVALUE macro = macroManager->getMacro((*inputBuffer)->ReplacedKeyScanCode);
+			*bufferPointer = macro->NewKeysLength;
 			
 			info = sizeof(size_t);
 			status = STATUS_SUCCESS;
