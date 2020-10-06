@@ -32,7 +32,7 @@ An app can communicate with the driver using IOCTLs. I will explain bellow what 
 If you want to see an example of how to call the IOCTLs, then look at the LowLevelKeyboard library, or even better, use the library cause it was created so you do not have to implement the communication yourself.
 
 Common return status codes (you can get them from any of the below listed IOCTLs):
-- STATUS_INVALID_BUFFER_SIZE -> Input buffer or output buffer are too small
+- `STATUS_INVALID_BUFFER_SIZE` -> Input buffer or output buffer are too small
 - Any status returned by WdfRequestRetrieveInputBuffer, WdfRequestRetrieveOutputBuffer, WdfMemoryCopyToBuffer
 
 ### IOCTL_KEYBOARDFILTER_GETKEYBOARDSLENGTH
@@ -42,7 +42,7 @@ Output:
 - output buffer needs to be `sizeof(size_t)`, the driver returns a size_t variable that is equal with the number of keyboards it is currently attached to
 
 Return status:
-- STATUS_SUCCESS -> Returned the number of keyboards successfully
+- `STATUS_SUCCESS` -> Returned the number of keyboards successfully
 
 ### IOCTL_KEYBOARDFILTER_GETKEYBOARDS
 Input:
@@ -63,8 +63,8 @@ Output:
 - output buffer needs to be `sizeof(BOOLEAN)`, it returns TRUE if there is a macro on the keyboard/key combination specified in the input, FALSE otherwise
 
 Return status:
-- STATUS_SUCCESS -> If a keyboard was found, no matter if there is a macro or not on that key
-- STATUS_NOT_FOUND -> Keyboard was not found
+- `STATUS_SUCCESS` -> If a keyboard was found, no matter if there is a macro or not on that key
+- `STATUS_NOT_FOUND` -> Keyboard was not found
 
 ### IOCTL_KEYBOARDFILTER_DELETEMACRO
 Input:
@@ -73,8 +73,8 @@ Output:
 - NO OUTPUT
 
 Return status:
-- STATUS_SUCCESS -> Macro was deleted (returned even if there was no macro stored)
-- STATUS_NOT_FOUND -> Keyboard was not found
+- `STATUS_SUCCESS` -> Macro was deleted (returned even if there was no macro stored)
+- `STATUS_NOT_FOUND` -> Keyboard was not found
 
 ### IOCTL_KEYBOARDFILTER_GETMACRO
 Input:
@@ -83,9 +83,9 @@ Output:
 - output buffer needs to be `macroLength * sizeof(INPUT_BUFFER_KEY)` (first call IOCTL_KEYBOARDFILTER_GETMACROLENGTH to get the macroLength), it returns an array of INPUT_KEYBOARD_KEY which is the replacing keys sequence of the macro
 
 Return status:
-- STATUS_SUCCESS -> Replacing keys sequence successfully returned
-- STATUS_NOT_FOUND -> Keyboard was not found
-- STATUS_NO_MATCH -> No macro found on that INPUT_KEYBOARD_MACRO
+- `STATUS_SUCCESS` -> Replacing keys sequence successfully returned
+- `STATUS_NOT_FOUND` -> Keyboard was not found
+- `STATUS_NO_MATCH` -> No macro found on that INPUT_KEYBOARD_MACRO
 
 ### IOCTL_KEYBOARDFILTER_GETMACROLENGTH
 Input:
@@ -94,6 +94,6 @@ Output:
 - output buffer needs to be `sizeof(size_t)`, it returns the number of INPUT_KEYBOARD_KEY (replacing key sequence) that are stored for that macro
 
 Return status:
-- STATUS_SUCCESS -> A macro was found
-- STATUS_NOT_FOUND -> Keyboard was not found
-- STATUS_NO_MATCH -> No macro found on that INPUT_KEYBOARD_MACRO
+- `STATUS_SUCCESS` -> A macro was found
+- `STATUS_NOT_FOUND` -> Keyboard was not found
+- `STATUS_NO_MATCH` -> No macro found on that INPUT_KEYBOARD_MACRO
