@@ -65,8 +65,8 @@ typedef struct _INPUT_KEYBOARD_KEY {
 
 
 /// <summary>
-/// First object passed as argument from ADDMACRO IOCTL.
-/// It represents which key and on which keyboard should be replaced.
+/// Used to identify a macro.
+/// It contains the key and the keyboard that represents the macro.
 /// </summary>
 typedef struct _INPUT_KEYBOARD_MACRO {
 
