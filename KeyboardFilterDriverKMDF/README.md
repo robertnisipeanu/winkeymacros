@@ -38,29 +38,32 @@ Common return status codes (you can get them from any of the below listed IOCTLs
 ### IOCTL_KEYBOARDFILTER_GETKEYBOARDSLENGTH
 Input:
 - NO INPUT
+
 Output:
 - output buffer needs to be `sizeof(size_t)`, the driver returns a size_t variable that is equal with the number of keyboards it is currently attached to
+
 
 Return status:
 - `STATUS_SUCCESS` -> Returned the number of keyboards successfully
 
 ### IOCTL_KEYBOARDFILTER_GETKEYBOARDS
 Input:
--
+
 Output:
--
+
 
 ### IOCTL_KEYBOARDFILTER_ADDMACRO
 Input:
-- 
+
 Output:
--
 
 ### IOCTL_KEYBOARDFILTER_ISMACRO
 Input:
 - input buffer needs to be an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key used to check if a macro is on
+
 Output:
 - output buffer needs to be `sizeof(BOOLEAN)`, it returns TRUE if there is a macro on the keyboard/key combination specified in the input, FALSE otherwise
+
 
 Return status:
 - `STATUS_SUCCESS` -> If a keyboard was found, no matter if there is a macro or not on that key
@@ -69,8 +72,10 @@ Return status:
 ### IOCTL_KEYBOARDFILTER_DELETEMACRO
 Input:
 - input buffer needs to be an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key of which the macro should be removed
+
 Output:
 - NO OUTPUT
+
 
 Return status:
 - `STATUS_SUCCESS` -> Macro was deleted (returned even if there was no macro stored)
@@ -79,8 +84,10 @@ Return status:
 ### IOCTL_KEYBOARDFILTER_GETMACRO
 Input:
 - input buffer needs to be an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key you want to get the macro of
+
 Output:
 - output buffer needs to be `macroLength * sizeof(INPUT_BUFFER_KEY)` (first call `IOCTL_KEYBOARDFILTER_GETMACROLENGTH` to get the macroLength), it returns an array of INPUT_KEYBOARD_KEY which is the replacing keys sequence of the macro
+
 
 Return status:
 - `STATUS_SUCCESS` -> Replacing keys sequence successfully returned
@@ -90,8 +97,10 @@ Return status:
 ### IOCTL_KEYBOARDFILTER_GETMACROLENGTH
 Input:
 - input buffer needs to be an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key of which you want to know the macro length;
+
 Output:
 - output buffer needs to be `sizeof(size_t)`, it returns the number of INPUT_KEYBOARD_KEY (replacing key sequence) that are stored for that macro
+
 
 Return status:
 - `STATUS_SUCCESS` -> A macro was found
