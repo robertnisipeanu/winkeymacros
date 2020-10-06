@@ -24,7 +24,8 @@ If you want to add a new feature, solve a bug, fix a typo or anything else, plea
 
 If you want to develop something on top of this driver, then what you're interested on starts here. I will try to provide documentation for every feature the driver has and how to use them.
 If something is missing from here, please feel free to add a PR modifying this README.md or a issue specifying what is missing.
-If you do not know how communication with a driver works and what is a IOCTL, then please use the LowLevelKeyboard library that implements this communication and is supposed to be easier to use (the driver still needs to be installed for the library to work, the library just acts as an API for the communication so you do not have to do it yourself).
+If you do not know how communication with a driver works and what is a IOCTL, then please use the LowLevelKeyboard library that implements this communication and is supposed to be easier to use (the driver still needs to be installed for the library to work, the library just acts as an API for the communication so you do not have to do it yourself). 
+All of the structures and IOCTLs mentioned here can be found in `shared.h` which you should include in your project if you do not want to use the LowLevelKeyboard library.
 
 ## How long is a macro stored?
 Each time a keyboard gets plugged in, the driver allocates an auto-incrementing `DWORD` DeviceID to it. The driver uses the DeviceID to store the macros for the keyboard. 
