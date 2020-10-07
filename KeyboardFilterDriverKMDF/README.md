@@ -61,9 +61,14 @@ Return status:
 
 ### IOCTL_KEYBOARDFILTER_GETKEYBOARDS
 Input:
+- NO INPUT
 
 Output:
+- output buffer needs to be at least(and a multiplier of) `sizeof(CUSTOM_KEYBOARD_INFO)`. It will populate as much of the buffer as you give, so if there are 3 keyboards and your buffer size is `2 * sizeof(CUSTOM_KEYBOARD_INFO)`, it will populate the buffer with 2 keyboards information and return STATUS_SUCCESS. If you want to get info about all the keyboards, then firstly call IOCTL_KEYBOARDFILTER_GETKEYBOARDSLENGTH to get how many keyboards info you can get.
 
+
+Return status:
+- `STATUS_SUCCESS` -> Returned X keyboards information (where X depends on the buffer size)
 
 ### IOCTL_KEYBOARDFILTER_ADDMACRO
 Input:

@@ -124,9 +124,9 @@ NTSTATUS KeyboardFilter_EvtDeviceAdd(IN WDFDRIVER Driver, IN PWDFDEVICE_INIT Dev
 	return status;
 }
 
-VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST Request, IN size_t OutputBufferLength, IN size_t InputBufferLength, IN ULONG IoControlCode) {
-	UNREFERENCED_PARAMETER(OutputBufferLength);
-	UNREFERENCED_PARAMETER(InputBufferLength);
+VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST Request, IN size_t OutputBufferSize, IN size_t InputBufferSize, IN ULONG IoControlCode) {
+	UNREFERENCED_PARAMETER(OutputBufferSize);
+	UNREFERENCED_PARAMETER(InputBufferSize);
 	PAGED_CODE();
 
 	WDFDEVICE hDevice;
@@ -162,7 +162,7 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 			break;
 		}
 
-		NT_ASSERT(length == InputBufferLength);
+		NT_ASSERT(length == InputBufferSize);
 
 		devExt->UpperConnectData = *connectData;
 
