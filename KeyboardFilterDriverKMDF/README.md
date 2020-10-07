@@ -41,6 +41,9 @@ To make the macros persistent, you need to store the macros in your own app and 
 An app can communicate with the driver using IOCTLs. I will explain bellow what every IOCTL does and what parameters it needs. This documentation doesn't shows you how to call an IOCTL in your app, but what every IOCTL does.
 If you want to see an example of how to call the IOCTLs, then look at the LowLevelKeyboard library, or even better, use the library cause it was created so you do not have to implement the communication yourself.
 
+If a variable is referenced with 'Size' in name, then it means the size in bytes, if it is referenced with 'Length' in name, then it means the number of objects.
+e.g.: A method takes two parameters: `PINPUT_KEYBOARD_KEY keys, size_t keysSize`, where keys is an array of 3 elements, then `keysSize = 3 * sizeof(INPUT_KEYBOARD_KEY)`. Another method takes two parameters: `PINPUT_KEYBOARD_KEY keys, size_t keysLength`, where keys is an array of 3 elements, then `keysLength = 3`.
+
 Common return status codes (you can get them from any of the below listed IOCTLs):
 - `STATUS_INVALID_BUFFER_SIZE` -> Input buffer or output buffer are too small
 - Any status returned by `WdfRequestRetrieveInputBuffer`, `WdfRequestRetrieveOutputBuffer`, `WdfMemoryCopyToBuffer`
