@@ -328,62 +328,22 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 	WDFDEVICE WdfDevice = WdfWdmDeviceGetWdfDeviceHandle(DeviceObject);
 	PDEVICE_EXTENSION devExt = GetContextFromDevice(WdfDevice);
 	MacroManager* macroManager = (MacroManager*)devExt->MacroManager;
-	PINVERTED_DEVICE_CONTEXT InvertedDeviceContext = InvertedGetContextFromDevice(ControlDevice);
-
-	WDFREQUEST notifyRequest;
 
 	// Loop through all input(key presses) we got (usually it is only one, but better to be safe)
 	PKEYBOARD_INPUT_DATA pCur;
 
 	for (pCur = InputDataStart; pCur < InputDataEnd; pCur++) {
 
-		//
-		// IDENTIFY MODE
-		//
-
-		// If ControlDevice not yet initialized, process keyboard input normally
-		if (ControlDevice == NULL) {
-			goto normalMode;
+		// Check if running in identify mode and cancel the key press if so
+		BOOLEAN identifyMode = KBFLTR_ProcessKeyPressIdentifyMode(ControlDevice, devExt->DeviceID, pCur);
+		if (identifyMode) {
+			continue;
 		}
-
-		// No queue available, process keyboard input normally
-		NTSTATUS queueAvailable = WdfIoQueueRetrieveNextRequest(InvertedDeviceContext->NotificationQueue, &notifyRequest);
-		if (!NT_SUCCESS(queueAvailable)) {
-			goto normalMode;
-		}
-
-		NTSTATUS queueReturnStatus = STATUS_SUCCESS;
-		ULONG_PTR info = 0;
-		
-		// Get a pointer to the output buffer that was passed in with the user
-		// IDENTIFYKEY IOCTL
-		PKEYPRESS_IDENTIFY bufferPointer;
-
-		queueAvailable = WdfRequestRetrieveOutputBuffer(notifyRequest, sizeof(KEYPRESS_IDENTIFY), reinterpret_cast<PVOID*>(&bufferPointer), NULL);
-		if (!NT_SUCCESS(queueAvailable)) {
-			// Should never get here as we already check for buffer size when we process the IOCTL, but we check to be sure
-			queueReturnStatus = STATUS_BUFFER_TOO_SMALL;
-
-			WdfRequestCompleteWithInformation(notifyRequest, queueReturnStatus, info);
-			
-			goto normalMode;
-		}
-
-		// Populate output buffer with data
-		bufferPointer->DeviceID = devExt->DeviceID;
-		bufferPointer->Key.MakeCode = pCur->MakeCode;
-		bufferPointer->Key.Flags = pCur->Flags;
-
-		// Return data and exit function (cancel key presses)
-		info = sizeof(KEYPRESS_IDENTIFY);
-		WdfRequestCompleteWithInformation(notifyRequest, queueReturnStatus, info);
-		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
-		return;
 
 		//
 		// NORMAL MODE
 		//
-normalMode:
+
 		// Check if there is a macro on the key
 		PKB_MACRO_HASHVALUE macro = macroManager->getMacro(pCur->MakeCode);
 		ULONG consumed = 0;
@@ -429,6 +389,60 @@ normalMode:
 	*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
 
 	//(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
+}
+
+/// <summary>
+/// Processes identify mode for a key press
+/// </summary>
+/// <param name="controlDevice">
+/// The device that handles user communication
+/// </param>
+/// <returns>
+/// TRUE -> Processed key as identify mode
+/// FALSE -> Key not processed, running in normal mode
+/// </returns>
+BOOLEAN KBFLTR_ProcessKeyPressIdentifyMode(WDFDEVICE controlDevice, DWORD DeviceID, PKEYBOARD_INPUT_DATA kbInput) {
+
+	// If ControlDevice not yet initialized, process keyboard input normally
+	if (controlDevice == NULL) {
+		return FALSE;
+	}
+
+	PINVERTED_DEVICE_CONTEXT devExt = InvertedGetContextFromDevice(controlDevice);
+	WDFREQUEST notifyRequest;
+
+	// If no queue available, process keyboard input normally
+	NTSTATUS queueAvailable = WdfIoQueueRetrieveNextRequest(devExt->NotificationQueue, &notifyRequest);
+	if (!NT_SUCCESS(queueAvailable)) {
+		return FALSE;
+	}
+
+	NTSTATUS queueReturnStatus = STATUS_SUCCESS;
+	ULONG_PTR info = 0;
+
+	// Get a pointer to the output buffer that was passed in with the user
+	// IDENTIFYKEY IOCTL
+	PKEYPRESS_IDENTIFY bufferPointer;
+
+	queueAvailable = WdfRequestRetrieveOutputBuffer(notifyRequest, sizeof(KEYPRESS_IDENTIFY), reinterpret_cast<PVOID*>(&bufferPointer), NULL);
+	if (!NT_SUCCESS(queueAvailable)) {
+		// Should never get here as we already check for buffer size when we process the IOCTL, but we check to be sure
+		queueReturnStatus = STATUS_BUFFER_TOO_SMALL;
+
+		WdfRequestCompleteWithInformation(notifyRequest, queueReturnStatus, info);
+
+		return FALSE;
+	}
+
+	// Populate output buffer with data
+	bufferPointer->DeviceID = DeviceID;
+	bufferPointer->Key.MakeCode = kbInput->MakeCode;
+	bufferPointer->Key.Flags = kbInput->Flags;
+
+	// Return data and cancel key press
+	info = sizeof(KEYPRESS_IDENTIFY);
+	WdfRequestCompleteWithInformation(notifyRequest, queueReturnStatus, info);
+	return TRUE;
 }
 
 

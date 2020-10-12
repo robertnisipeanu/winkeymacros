@@ -73,6 +73,8 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(INVERTED_DEVICE_CONTEXT, InvertedGetContextFr
 VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD_INPUT_DATA InputDataStart,
 	IN PKEYBOARD_INPUT_DATA InputDataEnd, IN OUT PULONG InputDataConsumed);
 
+BOOLEAN KBFLTR_ProcessKeyPressIdentifyMode(WDFDEVICE controlDevice, DWORD DeviceID, PKEYBOARD_INPUT_DATA kbInput);
+
 WDFDEVICE KBFLTR_GetDeviceByCustomID(DWORD DeviceID);
 size_t KBFLTR_GetNumberOfKeyboards();
 void KBFLTR_GetKeyboardsInfo(PCUSTOM_KEYBOARD_INFO buffer, size_t maxKeyboards, size_t* keyboardsNumberOutput);
