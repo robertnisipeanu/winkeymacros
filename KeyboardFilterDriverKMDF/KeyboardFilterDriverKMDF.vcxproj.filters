@@ -30,9 +30,6 @@
     <ClInclude Include="shared.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="stdint.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="uthash.h">
       <Filter>Header Files</Filter>
     </ClInclude>

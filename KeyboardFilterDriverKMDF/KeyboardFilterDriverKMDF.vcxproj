@@ -169,7 +169,6 @@
     <ClInclude Include="MacroManager.h" />
     <ClInclude Include="operators.h" />
     <ClInclude Include="shared.h" />
-    <ClInclude Include="stdint.h" />
     <ClInclude Include="UserCommunication.h" />
     <ClInclude Include="uthash.h" />
   </ItemGroup>
