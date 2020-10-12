@@ -2,46 +2,6 @@
 
 #define FILE_DEVICE_INVERTED 0xCF54
 
-#ifdef KEYBOARDFILTER_IS_OLD_VERSION
-#define IOCTL_KEYBOARDFILTER_KEYPRESSED_QUEUE CTL_CODE(FILE_DEVICE_INVERTED, 2049, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_KEYBOARDFILTER_SENDKEYPRESS CTL_CODE(FILE_DEVICE_INVERTED, 2050, METHOD_BUFFERED, FILE_ANY_ACCESS)
-
-//
-// type definition for the object that holds a key press input
-//
-typedef struct _CUSTOM_KEYBOARD_INPUT {
-    //
-    // Unit number.  E.g., for \Device\KeyboardPort0 the unit is '0',
-    // for \Device\KeyboardPort1 the unit is '1', and so on.
-    //
-
-    USHORT UnitId;
-
-    DWORD DeviceID;
-
-    //
-    // The "make" scan code (key depression).
-    //
-
-    USHORT MakeCode;
-
-    //
-    // The flags field indicates a "break" (key release) and other
-    // miscellaneous scan code information defined below.
-    //
-
-    USHORT Flags;
-
-    USHORT Reserved;
-
-    //
-    // Device-specific additional information for the event.
-    //
-
-    ULONG ExtraInformation;
-} CUSTOM_KEYBOARD_INPUT, * PCUSTOM_KEYBOARD_INPUT;
-#endif
-
 #define IOCTL_KEYBOARDFILTER_GETKEYBOARDSLENGTH CTL_CODE(FILE_DEVICE_INVERTED, 2051, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_KEYBOARDFILTER_GETKEYBOARDS CTL_CODE(FILE_DEVICE_INVERTED, 2052, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_KEYBOARDFILTER_ADDMACRO CTL_CODE(FILE_DEVICE_INVERTED, 2053, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -49,7 +9,7 @@ typedef struct _CUSTOM_KEYBOARD_INPUT {
 #define IOCTL_KEYBOARDFILTER_DELETEMACRO CTL_CODE(FILE_DEVICE_INVERTED, 2055, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_KEYBOARDFILTER_GETMACRO CTL_CODE(FILE_DEVICE_INVERTED, 2056, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_KEYBOARDFILTER_GETMACROLENGTH CTL_CODE(FILE_DEVICE_INVERTED, 2057, METHOD_BUFFERED, FILE_ANY_ACCESS)
-
+#define IOCTL_KEYBOARDFILTER_IDENTIFYKEY CTL_CODE(FILE_DEVICE_INVERTED, 2058, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 /// <summary>
 /// Second to last objects passed as arguments from ADDMACRO IOCTL.
@@ -65,8 +25,7 @@ typedef struct _INPUT_KEYBOARD_KEY {
 
 
 /// <summary>
-/// Used to identify a macro.
-/// It contains the key and the keyboard that represents the macro.
+/// The replaced key of the macro.
 /// </summary>
 typedef struct _INPUT_KEYBOARD_MACRO {
 
@@ -75,6 +34,17 @@ typedef struct _INPUT_KEYBOARD_MACRO {
     USHORT ReplacedKeyScanCode;
 
 } INPUT_KEYBOARD_MACRO, * PINPUT_KEYBOARD_MACRO;
+
+/// <summary>
+/// A key identifier (used as output from IOCTL_KEYBOARDFILTER_IDENTIFYKEY)
+/// </summary>
+typedef struct _KEYPRESS_IDENTIFY {
+
+    DWORD DeviceID;
+
+    INPUT_KEYBOARD_KEY Key;
+
+} KEYPRESS_IDENTIFY, * PKEYPRESS_IDENTIFY;
 
 /// <summary>
 /// type definition for the object that holds info about a keyboard

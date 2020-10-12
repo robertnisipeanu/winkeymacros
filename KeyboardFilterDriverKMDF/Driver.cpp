@@ -325,114 +325,66 @@ Return Value:
 --*/
 VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD_INPUT_DATA InputDataStart, IN PKEYBOARD_INPUT_DATA InputDataEnd, IN OUT PULONG InputDataConsumed) {
 
-	WDFDEVICE WdfDevice;
-	WdfDevice = WdfWdmDeviceGetWdfDeviceHandle(DeviceObject);
-
-	PDEVICE_EXTENSION devExt;
-	devExt = GetContextFromDevice(WdfDevice);
+	WDFDEVICE WdfDevice = WdfWdmDeviceGetWdfDeviceHandle(DeviceObject);
+	PDEVICE_EXTENSION devExt = GetContextFromDevice(WdfDevice);
 	MacroManager* macroManager = (MacroManager*)devExt->MacroManager;
+	PINVERTED_DEVICE_CONTEXT InvertedDeviceContext = InvertedGetContextFromDevice(ControlDevice);
 
-#ifdef KEYBOARDFILTER_IS_OLD_VERSION
-
-	PINVERTED_DEVICE_CONTEXT InvertedDeviceContext;
-	NTSTATUS QueueReturnStatus;
-	ULONG_PTR info;
 	WDFREQUEST notifyRequest;
-	PVOID  bufferPointer;
 
-	// ControlDevice not yet initialized, process keyboard input normally
-	if (ControlDevice == NULL) {
-		KdPrint(("[KB] No ControlDevice found, passing packets normally\n"));
-		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
-		(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
-		return;
-	}
-	InvertedDeviceContext = InvertedGetContextFromDevice(ControlDevice);
-
-	NTSTATUS queueAvailable = WdfIoQueueRetrieveNextRequest(InvertedDeviceContext->NotificationQueue, &notifyRequest);
-
-	// No queue available, process keyboard input normally
-	if (!NT_SUCCESS(queueAvailable)) {
-		KdPrint(("[KB] No queue available, passing packets normally"));
-		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
-		(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
-		return;
-	}
-
-	// Get a pointer to the output buffer that was passed-in with the user
-	// notification IOCTL. We'll use this to return additional info about
-	// the event.
-	size_t bufferSize;
-	queueAvailable = WdfRequestRetrieveOutputBuffer(notifyRequest, sizeof(CUSTOM_KEYBOARD_INPUT), (PVOID*)&bufferPointer, &bufferSize);
-	if (!NT_SUCCESS(queueAvailable)) {
-		// Should never get here
-		QueueReturnStatus = STATUS_SUCCESS;
-		info = 0;
-
-		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
-		(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
-
-		WdfRequestCompleteWithInformation(notifyRequest, QueueReturnStatus, info);
-		KdPrint(("[KB] WdfRequestRetrieveOutputBuffer fail with status 0x%x\n", queueAvailable));
-		return;
-	}
-
-	KEYBOARD_INPUT_DATA * pCur;
-	PCUSTOM_KEYBOARD_INPUT dataToReturn;
-	WDFMEMORY dataToReturnMemory;
-
-	// Create local buffer to init the data that will be sent
-	// to the app running in user mode.
-	// Process keys normally if it fails
-	NTSTATUS memoryAllocStatus = WdfMemoryCreate(WDF_NO_OBJECT_ATTRIBUTES, NonPagedPool, 0, bufferSize, &dataToReturnMemory, &dataToReturn);
-	if (!NT_SUCCESS(memoryAllocStatus)) {
-		KdPrint(("[KB] Fail to allocate memory for local buffer"));
-		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
-		(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
-		return;
-	}
-
-	// Loop through key presses to construct an array of CUSTOM_KEYBOARD_INPUT
-	// which will be then sent to the app through IOCTL
-	int i;
-	for (pCur = InputDataStart, i = 0; pCur < InputDataEnd; pCur++, i++) {
-
-		// If there is no space left in the buffer, then process the rest of the input normally
-		// TODO: Loop through IOCTL queue until all data is sent
-		if (i >= bufferSize / sizeof(CUSTOM_KEYBOARD_INPUT)) {
-			KdPrint(("[KB] Buffer size overrun\n"));
-			ULONG consumed = 0;
-			(*(PSERVICE_CALLBACK_ROUTINE)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, pCur, InputDataEnd, &consumed);
-			break;
-		}
-
-		dataToReturn[i].UnitId = pCur->UnitId;
-		dataToReturn[i].DeviceID = devExt->DeviceID; // Unique identifier for the keyboard
-		dataToReturn[i].Reserved = pCur->Reserved;
-		dataToReturn[i].ExtraInformation = pCur->ExtraInformation;
-		dataToReturn[i].Flags = pCur->Flags;
-		dataToReturn[i].MakeCode = pCur->MakeCode;
-	}
-
-	// Copy local buffer into output buffer
-	RtlCopyMemory(bufferPointer, dataToReturn, bufferSize);
-
-	// Delete local buffer
-	WdfObjectDelete(dataToReturnMemory);
-
-	// Return data
-	QueueReturnStatus = STATUS_SUCCESS;
-	info = i * sizeof(CUSTOM_KEYBOARD_INPUT);
-	WdfRequestCompleteWithInformation(notifyRequest, QueueReturnStatus, info);
-
-	*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
-
-	// Notify END
-#else
-
+	// Loop through all input(key presses) we got (usually it is only one, but better to be safe)
 	PKEYBOARD_INPUT_DATA pCur;
 
 	for (pCur = InputDataStart; pCur < InputDataEnd; pCur++) {
+
+		//
+		// IDENTIFY MODE
+		//
+
+		// If ControlDevice not yet initialized, process keyboard input normally
+		if (ControlDevice == NULL) {
+			goto normalMode;
+		}
+
+		// No queue available, process keyboard input normally
+		NTSTATUS queueAvailable = WdfIoQueueRetrieveNextRequest(InvertedDeviceContext->NotificationQueue, &notifyRequest);
+		if (!NT_SUCCESS(queueAvailable)) {
+			goto normalMode;
+		}
+
+		NTSTATUS queueReturnStatus = STATUS_SUCCESS;
+		ULONG_PTR info = 0;
+		
+		// Get a pointer to the output buffer that was passed in with the user
+		// IDENTIFYKEY IOCTL
+		PKEYPRESS_IDENTIFY bufferPointer;
+
+		queueAvailable = WdfRequestRetrieveOutputBuffer(notifyRequest, sizeof(KEYPRESS_IDENTIFY), reinterpret_cast<PVOID*>(&bufferPointer), NULL);
+		if (!NT_SUCCESS(queueAvailable)) {
+			// Should never get here as we already check for buffer size when we process the IOCTL, but we check to be sure
+			queueReturnStatus = STATUS_BUFFER_TOO_SMALL;
+
+			WdfRequestCompleteWithInformation(notifyRequest, queueReturnStatus, info);
+			
+			goto normalMode;
+		}
+
+		// Populate output buffer with data
+		bufferPointer->DeviceID = devExt->DeviceID;
+		bufferPointer->Key.MakeCode = pCur->MakeCode;
+		bufferPointer->Key.Flags = pCur->Flags;
+
+		// Return data and exit function (cancel key presses)
+		info = sizeof(KEYPRESS_IDENTIFY);
+		WdfRequestCompleteWithInformation(notifyRequest, queueReturnStatus, info);
+		*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
+		return;
+
+		//
+		// NORMAL MODE
+		//
+normalMode:
+		// Check if there is a macro on the key
 		PKB_MACRO_HASHVALUE macro = macroManager->getMacro(pCur->MakeCode);
 		ULONG consumed = 0;
 
@@ -477,7 +429,6 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 	*InputDataConsumed = (ULONG)(InputDataEnd - InputDataStart);
 
 	//(*(PSERVICE_CALLBACK_ROUTINE)(ULONG_PTR)devExt->UpperConnectData.ClassService)(devExt->UpperConnectData.ClassDeviceObject, InputDataStart, InputDataEnd, InputDataConsumed);
-#endif
 }
 
 

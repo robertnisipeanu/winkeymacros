@@ -49,6 +49,8 @@ Common return status codes (you can get them from any of the below listed IOCTLs
 - Any status returned by `WdfRequestRetrieveInputBuffer`, `WdfRequestRetrieveOutputBuffer`, `WdfMemoryCopyToBuffer`
 
 ### IOCTL_KEYBOARDFILTER_GETKEYBOARDSLENGTH
+Description: Gets the number of keyboards the driver is currently attached to (should be equivalent with the number of connected keyboards)
+
 Input:
 - NO INPUT
 
@@ -60,6 +62,8 @@ Return status:
 - `STATUS_SUCCESS` -> Returned the number of keyboards successfully
 
 ### IOCTL_KEYBOARDFILTER_GETKEYBOARDS
+Description: Gets a list of `CUSTOM_KEYBOARD_INFO` (keyboards information) of currently connected keyboards.
+
 Input:
 - NO INPUT
 
@@ -71,6 +75,8 @@ Return status:
 - `STATUS_SUCCESS` -> Returned X keyboards information (where X depends on the buffer size)
 
 ### IOCTL_KEYBOARDFILTER_ADDMACRO
+Description: Adds a macro for a keyboard - key combination.
+
 Input:
 - input buffer is composed of:
 	- an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key on which to add the macro
@@ -85,6 +91,8 @@ Return status:
 - `STATUS_SUCCESS` -> Macro was added successfully
 
 ### IOCTL_KEYBOARDFILTER_ISMACRO
+Description: Checks if there is a macro on a keyboard - key combination.
+
 Input:
 - input buffer needs to be an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key used to check if a macro is on
 
@@ -98,6 +106,8 @@ Return status:
 - `STATUS_GENERIC_COMMAND_FAILED` -> Failed to allocate memory for the macro in hashtable
 
 ### IOCTL_KEYBOARDFILTER_DELETEMACRO
+Description: Deletes a macro from a keyboard - key combination.
+
 Input:
 - input buffer needs to be an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key of which the macro should be removed
 
@@ -110,6 +120,8 @@ Return status:
 - `STATUS_NOT_FOUND` -> Keyboard was not found
 
 ### IOCTL_KEYBOARDFILTER_GETMACRO
+Description: Gets replacing key sequence of a macro.
+
 Input:
 - input buffer needs to be an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key you want to get the macro of
 
@@ -123,6 +135,8 @@ Return status:
 - `STATUS_NO_MATCH` -> No macro found on that INPUT_KEYBOARD_MACRO
 
 ### IOCTL_KEYBOARDFILTER_GETMACROLENGTH
+Description: Gets how many keys are stored in the replacing key sequence of a macro.
+
 Input:
 - input buffer needs to be an INPUT_KEYBOARD_MACRO structure that stores the device id and the scancode of the key of which you want to know the macro length;
 
@@ -134,3 +148,15 @@ Return status:
 - `STATUS_SUCCESS` -> A macro was found
 - `STATUS_NOT_FOUND` -> Keyboard was not found
 - `STATUS_NO_MATCH` -> No macro found on that INPUT_KEYBOARD_MACRO
+
+### IOCTL_KEYBOARDFILTER_IDENTIFYKEY
+Description: Gets the next key press from any keyboard (not affected by macros). The Request will be added to a Queue and will be completed later, when a key press happens. The keypress event will be cancelled for security reasons (to keep keyloggers away, user would see the key is not happening if he is another app and realize something is wrong).
+
+Input:
+- NO INPUT
+
+Output:
+- --
+
+Return status:
+- --

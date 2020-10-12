@@ -2,6 +2,7 @@
 #include "Driver.h"
 
 #define KBFLTR_USR_TAG 'Kusr'
+#define KBLFTR_MAX_QUEUE_LENGTH 3
 
 NTSTATUS UserCommunication_RegisterControlDevice(WDFDRIVER WdfDriver);
 

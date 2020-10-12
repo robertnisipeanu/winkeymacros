@@ -9,7 +9,6 @@ NTSTATUS UserCommunication_RegisterControlDevice(WDFDRIVER WdfDriver) {
 
 	PWDFDEVICE_INIT controlDeviceInit = NULL;
 	WDF_OBJECT_ATTRIBUTES controlDeviceAttributes;
-	WDF_IO_QUEUE_CONFIG controlDeviceQueueConfig;
 	PINVERTED_DEVICE_CONTEXT devContext;
 
 	// Used to create the virtual device
@@ -60,12 +59,13 @@ NTSTATUS UserCommunication_RegisterControlDevice(WDFDRIVER WdfDriver) {
 	}
 
 	// Set callback for IOCTLs and disable device power management
-	WDF_IO_QUEUE_CONFIG_INIT_DEFAULT_QUEUE(&controlDeviceQueueConfig, WdfIoQueueDispatchParallel);
-	controlDeviceQueueConfig.EvtIoDeviceControl = UserCommunication_EvtIoDeviceControl;
-	controlDeviceQueueConfig.PowerManaged = WdfFalse;
+	WDF_IO_QUEUE_CONFIG controlDeviceDefaultQueueConfig;
+	WDF_IO_QUEUE_CONFIG_INIT_DEFAULT_QUEUE(&controlDeviceDefaultQueueConfig, WdfIoQueueDispatchParallel);
+	controlDeviceDefaultQueueConfig.EvtIoDeviceControl = UserCommunication_EvtIoDeviceControl;
+	controlDeviceDefaultQueueConfig.PowerManaged = WdfFalse;
 
-	// Create an I/O Queue
-	status = WdfIoQueueCreate(ControlDevice, &controlDeviceQueueConfig, WDF_NO_OBJECT_ATTRIBUTES, WDF_NO_HANDLE);
+	// Create the default I/O Queue used for communication
+	status = WdfIoQueueCreate(ControlDevice, &controlDeviceDefaultQueueConfig, WDF_NO_OBJECT_ATTRIBUTES, WDF_NO_HANDLE);
 	if (!NT_SUCCESS(status)) {
 		WdfObjectDelete(ControlDevice);
 		KdPrint(("[KB] WdfIoQueueCreate failed with status 0x%x\n", status));
@@ -74,8 +74,9 @@ NTSTATUS UserCommunication_RegisterControlDevice(WDFDRIVER WdfDriver) {
 
 	// Create an I/O Queue for notification purposes
 	// and set it as manual dispatching to hold the Requests
-	WDF_IO_QUEUE_CONFIG_INIT(&controlDeviceQueueConfig, WdfIoQueueDispatchManual);
-	status = WdfIoQueueCreate(ControlDevice, &controlDeviceQueueConfig, WDF_NO_OBJECT_ATTRIBUTES, &devContext->NotificationQueue);
+	WDF_IO_QUEUE_CONFIG controlDeviceNotificationQueueConfig;
+	WDF_IO_QUEUE_CONFIG_INIT(&controlDeviceNotificationQueueConfig, WdfIoQueueDispatchManual);
+	status = WdfIoQueueCreate(ControlDevice, &controlDeviceNotificationQueueConfig, WDF_NO_OBJECT_ATTRIBUTES, &devContext->NotificationQueue);
 	if (!NT_SUCCESS(status)) {
 		WdfObjectDelete(ControlDevice);
 		KdPrint(("[KB] WdfIoQueueCreate[notification] failed with status 0x%x\n", status));
@@ -110,119 +111,6 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 	// KdPrint(("[KB] ControlDevice_EvtIoDeviceControl with ICC 0x%u\n", IoControlCode));
 	switch (IoControlCode) {
 
-// How old version worked:
-// - when a key press happens, cancel the key press and send the key press to an user mode app
-// - the user mode app would send back what keys to be pressed (the same key it got or a modified version if it's a macro)
-// How new version works:
-// - the app tells the driver that it should replace X key with [Y, Z, ...] keys and the driver stores that information into a hashtable
-// - when a keypress happens, the driver checks the hashtable if there is any macro for that key
-// Because the old version had to communicate with the app for every key press, there could be a delay between the physical key press and the driver gets the keypress back from the usermode app.
-// If the usermode app would freeze or there is too much cpu load and the app has lower priority than the process that is using the CPU, then some keypresses can even take seconds to be processed.
-// Another reason why the behaviour needed to be changed it's because this is a kernel driver, it gets EVERY key press, even if that happens inside a secure desktop (secure desktop = UAC prompt/winlogon page)
-// and a bad app could use that to get the user password
-// TLDR: OLD_VERSION was slower and less secure
-#ifdef KEYBOARDFILTER_IS_OLD_VERSION
-		case IOCTL_KEYBOARDFILTER_KEYPRESSED_QUEUE: {
-
-			//
-			// We return an 32-bit value with each completion notification
-			// Be sure the user's data buffer is at least long enough for that.
-			// 
-			if (OutputBufferSize < sizeof(CUSTOM_KEYBOARD_INPUT)) {
-				//
-				// Not enough space? Complete the request with
-				// STATUS_INVALID_PARAMETER (as set previously)
-				break;
-			}
-
-			//
-			// If request forward to holding queue, break and complete it
-			//
-			status = WdfRequestForwardToIoQueue(Request, devContext->NotificationQueue);
-			if (!NT_SUCCESS(status)) {
-				break;
-			}
-
-			// KdPrint(("[KB] Added IOCTL to waiting queue\n"));
-
-			//
-			// We exit the function so the queue doesn't get completed
-			//
-			return;
-
-		}
-		//
-		// Called by the app to make the driver send keys
-		//
-		case IOCTL_KEYBOARDFILTER_SENDKEYPRESS: {
-
-			//
-			// If the input buffer length is less than a possible key press
-			// exit
-			//
-			if (InputBufferSize < sizeof(CUSTOM_KEYBOARD_INPUT)) {
-				KdPrint(("[KB] InputBufferSize is too small\n"));
-				break;
-			}
-
-			// Get number of keys pressed
-			size_t numOfKeys = InputBufferSize / sizeof(CUSTOM_KEYBOARD_INPUT);
-			
-			PCUSTOM_KEYBOARD_INPUT keyInput;
-
-			//
-			// Retrieve input buffer
-			//
-			NTSTATUS memoryAllocStatus = WdfRequestRetrieveInputBuffer(Request, sizeof(CUSTOM_KEYBOARD_INPUT), (PVOID *) &keyInput, NULL);
-			if (!NT_SUCCESS(memoryAllocStatus)) {
-				KdPrint(("[KB] Failed to retrieve input buffer\n"));
-				break;
-			}
-
-			//
-			// Get the device (keyboard) that should execute
-			// the key pressses
-			// If DeviceID is 0 then get the first available keyboard
-			//
-			WDFDEVICE deviceToPressOn = KBFLTR_GetDeviceByCustomID(WdfDeviceGetDriver(WdfObjectContextGetObject(devContext)), keyInput[0].DeviceID);
-
-			if (deviceToPressOn) {
-
-				//
-				// The device on which the key should execute was found,
-				// so proceed with processing the key press event
-				// like it would come from the keyboard itself
-				//
-				ULONG consumed = 0;
-				PDEVICE_EXTENSION deviceToPressOnExt = GetContextFromDevice(deviceToPressOn);
-				PKEYBOARD_INPUT_DATA nativeKeys;
-				WDFMEMORY nativeKeysMemory;
-
-				memoryAllocStatus = WdfMemoryCreate(WDF_NO_OBJECT_ATTRIBUTES, NonPagedPool, 0, numOfKeys * sizeof(KEYBOARD_INPUT_DATA), &nativeKeysMemory, &nativeKeys);
-				if (!NT_SUCCESS(memoryAllocStatus)) {
-					KdPrint(("[KB] Failed to allocate memory for native inputs\n"));
-					break;
-				}
-
-				for (int i = 0; i < numOfKeys; i++) {
-					nativeKeys[i].UnitId = keyInput[i].UnitId;
-					nativeKeys[i].Reserved = keyInput[i].Reserved;
-					nativeKeys[i].ExtraInformation = keyInput[i].ExtraInformation;
-					nativeKeys[i].Flags = keyInput[i].Flags;
-					nativeKeys[i].MakeCode = keyInput[i].MakeCode;
-				}
-
-				(*(PSERVICE_CALLBACK_ROUTINE)deviceToPressOnExt->UpperConnectData.ClassService)(deviceToPressOnExt->UpperConnectData.ClassDeviceObject, nativeKeys, &nativeKeys[numOfKeys], &consumed);
-
-				WdfObjectDelete(nativeKeysMemory);
-			}
-
-			status = STATUS_SUCCESS;
-			info = 0;
-
-			break;
-		}
-#endif
 		case IOCTL_KEYBOARDFILTER_GETKEYBOARDSLENGTH: {
 
 			// Make sure the output buffer can store our parameter
@@ -236,7 +124,7 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			// Retrieve output buffer
 			status = WdfRequestRetrieveOutputBuffer(Request, sizeof(size_t), reinterpret_cast<PVOID*>(&bufferPointer), NULL);
 			if (!NT_SUCCESS(status)) {
-				KdPrint("[KB] Failed to retrieve output buffer\n");
+				KdPrint(("[KB] Failed to retrieve output buffer\n"));
 				break;
 			}
 
@@ -570,6 +458,32 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 			status = STATUS_SUCCESS;
 
 			break;
+		}
+		case IOCTL_KEYBOARDFILTER_IDENTIFYKEY: {
+
+			//
+			// We return a KEYPRESS_IDENTIFY object, so make sure the output buffer is big enough to store it
+			//
+			if (OutputBufferSize < sizeof(KEYPRESS_IDENTIFY)) {
+				status = STATUS_BUFFER_TOO_SMALL;
+				break;
+			}
+
+			// If there are already KBLFTR_MAX_QUEUE_LENGTH Requests in the Queue, deny this one
+			ULONG queueRequests, driverRequests;
+			WdfIoQueueGetState(devContext->NotificationQueue, &queueRequests, &driverRequests);
+
+			// TODO
+			KdPrint(("queueRequests: %u, driverRequests: %u", queueRequests, driverRequests));
+
+			// Forward request to our queue
+			status = WdfRequestForwardToIoQueue(Request, devContext->NotificationQueue);
+			if (!NT_SUCCESS(status)) {
+				break;
+			}
+
+			// Exit the function so the queue doesn't get completed
+			return;
 		}
 
 	}
