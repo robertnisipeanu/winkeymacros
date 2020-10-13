@@ -168,7 +168,8 @@
     <ClInclude Include="Driver.h" />
     <ClInclude Include="MacroManager.h" />
     <ClInclude Include="operators.h" />
-    <ClInclude Include="shared.h" />
+    <ClInclude Include="shared_ioctls.h" />
+    <ClInclude Include="shared_structs.h" />
     <ClInclude Include="UserCommunication.h" />
     <ClInclude Include="uthash.h" />
   </ItemGroup>

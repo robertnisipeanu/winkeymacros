@@ -25,7 +25,8 @@
 #include <initguid.h>
 #include <devguid.h>
 #include "UserCommunication.h"
-#include "shared.h"
+#include "shared_ioctls.h"
+#include "shared_structs.h"
 #include "uthash.h"
 #include "operators.h"
 #include "MacroManager.h"

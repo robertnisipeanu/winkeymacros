@@ -9,7 +9,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleTest", "ConsoleTest\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ConsoleCommunicationTest", "ConsoleCommunicationTest\ConsoleCommunicationTest.vcxproj", "{7B3182AD-9011-4EE6-914E-8871F9FAA0FC}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LowLevelKeyboard", "LowLevelKeyboard\LowLevelKeyboard.vcxproj", "{F69EA744-D834-450A-AE97-A25F12EB0F0C}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MacroLibrary", "MacroLibrary\MacroLibrary.vcxproj", "{7BFA749A-EFE4-439A-929C-E3816ED50050}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -85,20 +85,20 @@ Global
 		{7B3182AD-9011-4EE6-914E-8871F9FAA0FC}.Release|x64.Build.0 = Release|x64
 		{7B3182AD-9011-4EE6-914E-8871F9FAA0FC}.Release|x86.ActiveCfg = Release|Win32
 		{7B3182AD-9011-4EE6-914E-8871F9FAA0FC}.Release|x86.Build.0 = Release|Win32
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|Any CPU.ActiveCfg = Debug|Win32
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|ARM.ActiveCfg = Debug|Win32
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|ARM64.ActiveCfg = Debug|Win32
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|x64.ActiveCfg = Debug|x64
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|x64.Build.0 = Debug|x64
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|x86.ActiveCfg = Debug|Win32
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Debug|x86.Build.0 = Debug|Win32
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|Any CPU.ActiveCfg = Release|Win32
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|ARM.ActiveCfg = Release|Win32
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|ARM64.ActiveCfg = Release|Win32
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|x64.ActiveCfg = Release|x64
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|x64.Build.0 = Release|x64
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|x86.ActiveCfg = Release|Win32
-		{F69EA744-D834-450A-AE97-A25F12EB0F0C}.Release|x86.Build.0 = Release|Win32
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Debug|ARM.ActiveCfg = Debug|Win32
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Debug|ARM64.ActiveCfg = Debug|Win32
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Debug|x64.ActiveCfg = Debug|x64
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Debug|x64.Build.0 = Debug|x64
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Debug|x86.ActiveCfg = Debug|Win32
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Debug|x86.Build.0 = Debug|Win32
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Release|Any CPU.ActiveCfg = Release|Win32
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Release|ARM.ActiveCfg = Release|Win32
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Release|ARM64.ActiveCfg = Release|Win32
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Release|x64.ActiveCfg = Release|x64
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Release|x64.Build.0 = Release|x64
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Release|x86.ActiveCfg = Release|Win32
+		{7BFA749A-EFE4-439A-929C-E3816ED50050}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
