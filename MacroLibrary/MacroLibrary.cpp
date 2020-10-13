@@ -33,7 +33,7 @@ MACROLIB_STATUS macrolib_get_keyboardslen(size_t* outLength) {
 	return MACROLIB_STATUS_SUCCESS;
 }
 
-MACROLIB_STATUS macrolib_get_keyboards(PCUSTOM_KEYBOARD_INFO outKeyboards, size_t* outKeyboardsLength, size_t keyboardsMaxLength) {
+MACROLIB_STATUS macrolib_get_keyboards(PCUSTOM_KEYBOARD_INFO outKeyboards, size_t keyboardsMaxLength, size_t* outKeyboardsLength) {
 	if (driverHandle == INVALID_HANDLE_VALUE) {
 		return MACROLIB_STATUS_CONNECTION_FAIL;
 	}
@@ -84,23 +84,23 @@ MACROLIB_STATUS macrolib_delete_macro(INPUT_KEYBOARD_MACRO macroKey) {
 	return MACROLIB_STATUS_SUCCESS;
 }
 
-MACROLIB_STATUS macrolib_get_macro_length(size_t* outLength) {
+MACROLIB_STATUS macrolib_get_macro_length(INPUT_KEYBOARD_MACRO macroKey, size_t* outLength) {
 	if (driverHandle == INVALID_HANDLE_VALUE) {
 		return MACROLIB_STATUS_CONNECTION_FAIL;
 	}
 
-	DeviceIoControl(driverHandle, static_cast<DWORD>(IOCTL_KEYBOARDFILTER_GETMACROLENGTH), NULL, 0, outLength, sizeof(size_t), NULL, NULL);
+	DeviceIoControl(driverHandle, static_cast<DWORD>(IOCTL_KEYBOARDFILTER_GETMACROLENGTH), &macroKey, sizeof(INPUT_KEYBOARD_MACRO), outLength, sizeof(size_t), NULL, NULL);
 
 	return MACROLIB_STATUS_SUCCESS;
 }
 
-MACROLIB_STATUS macrolib_get_macro(PINPUT_KEYBOARD_KEY outKeys, size_t* outKeysLength, size_t keysMaxLength) {
+MACROLIB_STATUS macrolib_get_macro(INPUT_KEYBOARD_MACRO macroKey, PINPUT_KEYBOARD_KEY outKeys, size_t keysMaxLength, size_t* outKeysLength) {
 	if (driverHandle == INVALID_HANDLE_VALUE) {
 		return MACROLIB_STATUS_CONNECTION_FAIL;
 	}
 
 	DWORD outMacroSize = 0;
-	DeviceIoControl(driverHandle, static_cast<DWORD>(IOCTL_KEYBOARDFILTER_GETMACRO), NULL, 0, outKeys, (DWORD) keysMaxLength * sizeof(INPUT_KEYBOARD_KEY), &outMacroSize, NULL);
+	DeviceIoControl(driverHandle, static_cast<DWORD>(IOCTL_KEYBOARDFILTER_GETMACRO), &macroKey, sizeof(INPUT_KEYBOARD_MACRO), outKeys, (DWORD) keysMaxLength * sizeof(INPUT_KEYBOARD_KEY), &outMacroSize, NULL);
 	*outKeysLength = outMacroSize / sizeof(INPUT_KEYBOARD_KEY);
 
 	return MACROLIB_STATUS_SUCCESS;

@@ -136,7 +136,7 @@ extern "C" {
     /// Max size of outKeyboards array
     /// </param>
     /// <returns></returns>
-    MACROLIB_STATUS DLLEXPORT macrolib_get_keyboards(PCUSTOM_KEYBOARD_INFO outKeyboards, size_t* outKeyboardsLength, size_t keyboardsMaxLength);
+    MACROLIB_STATUS DLLEXPORT macrolib_get_keyboards(PCUSTOM_KEYBOARD_INFO outKeyboards, size_t keyboardsMaxLength, size_t* outKeyboardsLength);
 
     /// <summary>
     /// Add a macro
@@ -152,6 +152,7 @@ extern "C" {
     /// </param>
     /// <returns></returns>
     MACROLIB_STATUS DLLEXPORT macrolib_add_macro(INPUT_KEYBOARD_MACRO macroKey, PINPUT_KEYBOARD_KEY replacingKeys, size_t replacingKeysLength);
+
     /// <summary>
     /// Check if there is a macro on a key
     /// </summary>
@@ -163,6 +164,7 @@ extern "C" {
     /// </param>
     /// <returns></returns>
     MACROLIB_STATUS DLLEXPORT macrolib_is_macro(INPUT_KEYBOARD_MACRO macroKey, BOOLEAN* outResult);
+
     /// <summary>
     /// Delete a macro
     /// </summary>
@@ -175,14 +177,21 @@ extern "C" {
     /// <summary>
     /// Get the number of INPUT_KEYBOARD_KEYs (replacing keys) from a macro
     /// </summary>
+    /// <param name="macro">
+    /// Macro which to get the size of
+    /// </param>
     /// <param name="outLength">
     /// Pointer to a size_t var that will get the result
     /// </param>
     /// <returns></returns>
-    MACROLIB_STATUS DLLEXPORT macrolib_get_macro_length(size_t* outLength);
+    MACROLIB_STATUS DLLEXPORT macrolib_get_macro_length(INPUT_KEYBOARD_MACRO macro, size_t* outLength);
+
     /// <summary>
     /// Get the replacing keys of a macro
     /// </summary>
+    /// <param name="macroKey">
+    /// Macro which to get replacing keys of
+    /// </param>
     /// <param name="outKeys">
     /// An array of INPUT_KEYBOARD_KEYs that will get the result
     /// </param>
@@ -193,7 +202,7 @@ extern "C" {
     /// Maximum length of outKeys
     /// </param>
     /// <returns></returns>
-    MACROLIB_STATUS DLLEXPORT macrolib_get_macro(PINPUT_KEYBOARD_KEY outKeys, size_t* outKeysLength, size_t keysMaxLength);
+    MACROLIB_STATUS DLLEXPORT macrolib_get_macro(INPUT_KEYBOARD_MACRO macroKey, PINPUT_KEYBOARD_KEY outKeys, size_t keysMaxLength, size_t* outKeysLength);
 
 
     MACROLIB_STATUS DLLEXPORT macrolib_identify_key();
