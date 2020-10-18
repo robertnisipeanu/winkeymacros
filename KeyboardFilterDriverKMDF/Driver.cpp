@@ -98,6 +98,39 @@ NTSTATUS KeyboardFilter_EvtDeviceAdd(IN WDFDRIVER Driver, IN PWDFDEVICE_INIT Dev
 	filterExt = GetContextFromDevice(hDevice);
 	filterExt->WdfDevice = hDevice;
 
+	// Check if device is an USB device (so we can query for USB information used to identify the device more accurately, like Serial Number)
+	WCHAR enumeratorName[32];
+	ULONG enumeratorNameLength;
+	status = WdfDeviceQueryProperty(hDevice, DevicePropertyEnumeratorName, sizeof(enumeratorName), enumeratorName, &enumeratorNameLength);
+	if (!NT_SUCCESS(status)) {
+		KdPrint(("[KB] WdfDeviceQueryProperty[EnumeratorName] failed with status code 0x%x\n", status));
+		return status;
+	}
+	
+	UNICODE_STRING enumeratorNameString, enumeratorNameUSB;
+
+	RtlInitUnicodeString(&enumeratorNameUSB, L"HID");
+	RtlInitUnicodeString(&enumeratorNameString, enumeratorName);
+
+	if (RtlCompareUnicodeString(&enumeratorNameString, &enumeratorNameUSB, TRUE) == 0) {
+		// Device is USB
+
+		WDF_USB_DEVICE_CREATE_CONFIG UsbDeviceConfig;
+
+		// Create WDFUSBDEVICE object
+		WDF_USB_DEVICE_CREATE_CONFIG_INIT(&UsbDeviceConfig, USBD_CLIENT_CONTRACT_VERSION_602);
+
+		status = WdfUsbTargetDeviceCreateWithParameters(hDevice, &UsbDeviceConfig, WDF_NO_OBJECT_ATTRIBUTES, &filterExt->UsbDevice);
+		if (!NT_SUCCESS(status)) {
+			KdPrint(("WdfUsbTargetDeviceCreateWithParameters failed with status 0x%x\n", status));
+			return status;
+		}
+
+	}
+	else {
+		filterExt->UsbDevice = NULL;
+	}
+
 	// Configure the default queue to be Parallel. Do not use sequential queue
 	// if this driver is going to be filtering PS2 ports because it can lead to
 	// deadlock. The PS2 port driver sends a request to the top of the stack when it
@@ -182,6 +215,24 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 
 		// Add device extension to our global keyboard manager
 		HASH_ADD(hh, _keyboards, DeviceID, sizeof(DWORD), devExt);
+
+		// Testing
+		{
+
+			KdPrint(("----------------------------\nDEVICE PROPERTIES\n----------------------------\n"));
+
+			for (int propIt = DevicePropertyDeviceDescription; propIt != DevicePropertyContainerID; propIt++) {
+				ULONG resultLength = 0;
+
+				DEVICE_REGISTRY_PROPERTY prop = static_cast<DEVICE_REGISTRY_PROPERTY>(propIt);
+				WdfDeviceQueryProperty(hDevice, prop, 0, NULL, &resultLength);
+
+				KdPrint(("Prop: %d; Length: %u\n", propIt, resultLength));
+			}
+
+			KdPrint(("----------------------------\nDEVICE PROPERTIES END\n----------------------------\n"));
+
+		}
 
 		break;
 	}
@@ -412,7 +463,7 @@ BOOLEAN KBFLTR_ProcessKeyPressIdentifyMode(WDFDEVICE controlDevice, DWORD Device
 	WDFREQUEST notifyRequest;
 
 	// If no queue available, process keyboard input normally
-	NTSTATUS queueAvailable = WdfIoQueueRetrieveNextRequest(devExt->NotificationQueue, &notifyRequest);
+	NTSTATUS queueAvailable = WdfIoQueueRetrieveNextRequest(devExt->IdentifyKeyQueue, &notifyRequest);
 	if (!NT_SUCCESS(queueAvailable)) {
 		return FALSE;
 	}
@@ -477,9 +528,8 @@ VOID KeyboardFilterRequestCompletionRoutine(WDFREQUEST Request, WDFIOTARGET Targ
 
 	if (NT_SUCCESS(status) && CompletionParams->Type == WdfRequestTypeDeviceControlInternal && CompletionParams->Parameters.Ioctl.IoControlCode == IOCTL_KEYBOARD_QUERY_ATTRIBUTES) {
 		if (CompletionParams->Parameters.Ioctl.Output.Length >= sizeof(KEYBOARD_ATTRIBUTES)) {
-
-			KdPrint(("[KB] Cached KeyboardAttributes\n"));
 			status = WdfMemoryCopyToBuffer(buffer, CompletionParams->Parameters.Ioctl.Output.Offset, &devExt->KeyboardAttributes, sizeof(KEYBOARD_ATTRIBUTES));
+			KdPrint(("[KB] Cached KeyboardAttributes\n"));
 		}
 	}
 
@@ -538,7 +588,7 @@ void KBFLTR_GetKeyboardsInfo(PCUSTOM_KEYBOARD_INFO buffer, size_t maxKeyboards, 
 	HASH_ITER(hh, _keyboards, s, tmp) {
 
 		// If there is no more space in the buffer, return
-		if (maxKeyboards >= *keyboardsNumberOutput) {
+		if (*keyboardsNumberOutput >= maxKeyboards) {
 			return;
 		}
 
@@ -549,9 +599,34 @@ void KBFLTR_GetKeyboardsInfo(PCUSTOM_KEYBOARD_INFO buffer, size_t maxKeyboards, 
 		sInfo.NumberOfFunctionKeys = s->KeyboardAttributes.NumberOfFunctionKeys;
 		sInfo.NumberOfIndicators = s->KeyboardAttributes.NumberOfIndicators;
 		sInfo.NumberOfKeysTotal = s->KeyboardAttributes.NumberOfKeysTotal;
+
+		KdPrint(("\n\n"));
+		// Get device hardware ID
+		ULONG dataLen;
+		WCHAR test[256];
+
+		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyHardwareID, sizeof(sInfo.HID), sInfo.HID, &dataLen);
+		KdPrint(("HardwareID[%u]: %ws\n", dataLen, sInfo.HID));
+
+		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyDeviceDescription, sizeof(test), test, &dataLen);
+		KdPrint(("DeviceDescription[%u]: %ws\n", dataLen, test));
+
+		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyManufacturer, sizeof(test), test, &dataLen);
+		KdPrint(("DevicePropertyManufacturer[%u]: %ws\n", dataLen, test));
+
+		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyFriendlyName, sizeof(test), test, &dataLen);
+		KdPrint(("DevicePropertyFriendlyName[%u]: %ws\n", dataLen, test));
+
+		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyEnumeratorName, sizeof(test), test, &dataLen);
+		KdPrint(("DevicePropertyEnumeratorName [%u]: %ws\n", dataLen, test));
+
+		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyContainerID, sizeof(test), test, &dataLen);
+		KdPrint(("DevicePropertyContainerID  [%u]: %ws\n", dataLen, test));
+
+		//NTSTATUS testStatus = WdfUsbTargetDeviceQueryString(s->WdfDevice, )
 		
 		// Copy the current keyboard info item into buffer
-		RtlCopyMemory(&sInfo, buffer + *keyboardsNumberOutput, sizeof(CUSTOM_KEYBOARD_INFO));
+		RtlCopyMemory(buffer + *keyboardsNumberOutput, &sInfo, sizeof(CUSTOM_KEYBOARD_INFO));
 
 		// Increase the number of copied items
 		*keyboardsNumberOutput += 1;

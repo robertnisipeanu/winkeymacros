@@ -21,11 +21,30 @@ int main() {
     status = macrolib_get_keyboardslen(&numOfKeyb);
 
     if (status != MACROLIB_STATUS_SUCCESS) {
-        std::cout << "Failed to number of keyboards, closing program" << std::endl;
+        std::cout << "Failed to get number of keyboards, closing program" << std::endl;
         return 1;
     }
 
+
     std::cout << "Number of keybords: " << numOfKeyb << std::endl;
+
+    PCUSTOM_KEYBOARD_INFO keybInfos = reinterpret_cast<PCUSTOM_KEYBOARD_INFO>(malloc(numOfKeyb * sizeof(CUSTOM_KEYBOARD_INFO)));
+
+    size_t actualNumOfKeyb = 0;
+    status = macrolib_get_keyboards(keybInfos, numOfKeyb, &actualNumOfKeyb);
+
+    if (status != MACROLIB_STATUS_SUCCESS) {
+        std::cout << "Failed to get keyboards info, closing program" << std::endl;
+    }
+
+    std::cout << "Actual number of keyboards: " << actualNumOfKeyb << std::endl;
+
+    for (int i = 0; i < actualNumOfKeyb; i++) {
+        std::cout << "DeviceID: " << (keybInfos + i)->DeviceID << "; HID: ";
+        std::wcout << (keybInfos + i)->HID << std::endl;
+    }
+
+    free(keybInfos);
 
 
     while (TRUE) {

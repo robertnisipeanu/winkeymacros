@@ -14,6 +14,12 @@ extern "C" {
 
 #pragma region shared_structs.h
 
+#pragma once
+
+#ifndef _KERNEL_MODE
+#include <windows.h>
+#endif
+
     /// <summary>
     /// Second to last objects passed as arguments from ADDMACRO IOCTL.
     /// It represents the keys that replaces the macro
@@ -25,6 +31,7 @@ extern "C" {
         USHORT Flags;
 
     } INPUT_KEYBOARD_KEY, * PINPUT_KEYBOARD_KEY;
+
 
     /// <summary>
     /// The replaced key of the macro.
@@ -68,7 +75,7 @@ extern "C" {
         DWORD DeviceID;
 
         //
-        // Maybe replace this 
+        // Device Hardware ID
         //
         WCHAR HID[256];
 

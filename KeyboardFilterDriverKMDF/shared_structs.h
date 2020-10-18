@@ -59,7 +59,7 @@ typedef struct _CUSTOM_KEYBOARD_INFO {
     DWORD DeviceID;
 
     //
-    // Maybe replace this 
+    // Device Hardware ID
     //
     WCHAR HID[256];
 

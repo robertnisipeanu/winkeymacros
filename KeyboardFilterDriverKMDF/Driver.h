@@ -19,6 +19,11 @@
 
 #include <wdf.h>
 
+// USB libs
+#include <usbdi.h>
+#include <usbdlib.h>
+#include <wdfusb.h>
+
 #define NTRSTRSAFE_LIB
 #include <ntstrsafe.h>
 
@@ -60,12 +65,21 @@ typedef struct _DEVICE_EXTENSION
 	//
 	PVOID MacroManager; // MacroManager* MacroManager
 
+	//
+	// Handle to WDFUSBDEVICE if it's an USB Device, otherwise NULL
+	//
+	WDFUSBDEVICE UsbDevice;
+
 	UT_hash_handle hh;
 
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
 
 typedef struct _INVERTED_DEVICE_CONTEXT {
-	WDFQUEUE NotificationQueue;
+
+	WDFQUEUE IdentifyKeyQueue; // Used to identify key presses (without being affected by macros) by a user-mode app
+
+	WDFQUEUE KeyboardEventQueue; // Used to send keyboard events (like keyboard connect/disconnect) to a user-mode app - NOT YET IMPLEMENTED
+
 } INVERTED_DEVICE_CONTEXT, *PINVERTED_DEVICE_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_EXTENSION, GetContextFromDevice)

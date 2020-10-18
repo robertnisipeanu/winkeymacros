@@ -72,16 +72,28 @@ NTSTATUS UserCommunication_RegisterControlDevice(WDFDRIVER WdfDriver) {
 		return status;
 	}
 
-	// Create an I/O Queue for notification purposes
-	// and set it as manual dispatching to hold the Requests
-	WDF_IO_QUEUE_CONFIG controlDeviceNotificationQueueConfig;
-	WDF_IO_QUEUE_CONFIG_INIT(&controlDeviceNotificationQueueConfig, WdfIoQueueDispatchManual);
-	status = WdfIoQueueCreate(ControlDevice, &controlDeviceNotificationQueueConfig, WDF_NO_OBJECT_ATTRIBUTES, &devContext->NotificationQueue);
+	// Create an I/O Queue for notification(identifying keys) purposes
+	// and set it as manual dispatching to hold the Requests.
+	WDF_IO_QUEUE_CONFIG controlDeviceIdentifyKeyQueueConfig;
+	WDF_IO_QUEUE_CONFIG_INIT(&controlDeviceIdentifyKeyQueueConfig, WdfIoQueueDispatchManual);
+	status = WdfIoQueueCreate(ControlDevice, &controlDeviceIdentifyKeyQueueConfig, WDF_NO_OBJECT_ATTRIBUTES, &devContext->IdentifyKeyQueue);
 	if (!NT_SUCCESS(status)) {
 		WdfObjectDelete(ControlDevice);
-		KdPrint(("[KB] WdfIoQueueCreate[notification] failed with status 0x%x\n", status));
+		KdPrint(("[KB] WdfIoQueueCreate[IdentifyKey] failed with status 0x%x\n", status));
 		return status;
 	}
+
+/*	// Create an I/O Queue for notification(keyboard events) purposes
+	// and set it as manual dispatching to hold the Requests.
+	WDF_IO_QUEUE_CONFIG controlDeviceKeyboardEventsQueueConfig;
+	WDF_IO_QUEUE_CONFIG_INIT(&controlDeviceKeyboardEventsQueueConfig, WdfIoQueueDispatchManual);
+	status = WdfIoQueueCreate(ControlDevice, &controlDeviceKeyboardEventsQueueConfig, WDF_NO_OBJECT_ATTRIBUTES, &devContext->KeyboardEventQueue);
+	if (!NT_SUCCESS(status)) {
+		WdfObjectDelete(ControlDevice);
+		KdPrint(("[KB] WdfIoQueueCreate[KeyboardEvents] failed with status 0x%x\n", status));
+		return status;
+	}
+*/
 
 	WdfControlFinishInitializing(ControlDevice);
 
@@ -471,13 +483,13 @@ VOID UserCommunication_EvtIoDeviceControl(WDFQUEUE Queue, WDFREQUEST Request, si
 
 			// If there are already KBLFTR_MAX_QUEUE_LENGTH Requests in the Queue, deny this one
 			ULONG queueRequests, driverRequests;
-			WdfIoQueueGetState(devContext->NotificationQueue, &queueRequests, &driverRequests);
+			WdfIoQueueGetState(devContext->IdentifyKeyQueue, &queueRequests, &driverRequests);
 
 			// TODO
 			KdPrint(("queueRequests: %u, driverRequests: %u", queueRequests, driverRequests));
 
 			// Forward request to our queue
-			status = WdfRequestForwardToIoQueue(Request, devContext->NotificationQueue);
+			status = WdfRequestForwardToIoQueue(Request, devContext->IdentifyKeyQueue);
 			if (!NT_SUCCESS(status)) {
 				break;
 			}
