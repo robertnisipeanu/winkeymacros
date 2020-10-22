@@ -548,24 +548,6 @@ VOID KeyboardFilterRequestCompletionRoutine(WDFREQUEST Request, WDFIOTARGET Targ
 			KdPrint(("[KB] Cached KeyboardAttributes\n"));
 		}
 	}
-	else if (NT_SUCCESS(status) && CompletionParams->Type == WdfRequestTypeDeviceControlInternal && CompletionParams->Parameters.Ioctl.IoControlCode == IOCTL_HID_GET_SERIALNUMBER_STRING) {
-		size_t serialNumberLength = CompletionParams->Parameters.Ioctl.Output.Length;
-		KdPrint(("[KB] S/N length: %u\n", serialNumberLength));
-		PWCHAR serialNumber = reinterpret_cast<PWCHAR>(ExAllocatePoolWithTag(NonPagedPool, serialNumberLength, KBFLTR_KP_TAG));
-		NTSTATUS testStatus = WdfMemoryCopyToBuffer(buffer, CompletionParams->Parameters.Ioctl.Output.Offset, serialNumber, serialNumberLength);
-		
-		if (NT_SUCCESS(testStatus)) {
-			KdPrint(("[KB] S/N: %ws\n", serialNumber));
-		}
-		else {
-			KdPrint(("[KB] Failed to copy S/N buffer with status code: 0x%x\n", testStatus));
-		}
-
-		ExFreePoolWithTag(serialNumber, KBFLTR_KP_TAG);
-	}
-	else if (CompletionParams->Type == WdfRequestTypeDeviceControlInternal && CompletionParams->Parameters.Ioctl.IoControlCode == IOCTL_HID_GET_SERIALNUMBER_STRING) {
-		KdPrint(("[KB] Failed to get S/N with status code: 0x%x\n", status));
-	}
 
 	WdfRequestComplete(Request, status);
 
@@ -743,7 +725,11 @@ void KBFLTR_GetKeyboardsInfo(PCUSTOM_KEYBOARD_INFO buffer, size_t maxKeyboards, 
 				if (WdfRequestSend(Request, target, &options) == TRUE) {
 					instStatus = WdfRequestGetStatus(Request);
 					if (NT_SUCCESS(instStatus)) {
-						KdPrint(("Instance id: \n"));
+						WDF_REQUEST_COMPLETION_PARAMS completionParams;
+						WDF_REQUEST_COMPLETION_PARAMS_INIT(&completionParams);
+						WdfRequestGetCompletionParams(Request, &completionParams);
+
+						KdPrint(("Instance get status: 0x%x, Instance id: %ws\n", completionParams.IoStatus.Status, completionParams.IoStatus.Information));
 					}
 					else {
 						KdPrint(("instanceid failed with status 0x%x\n", instStatus));
