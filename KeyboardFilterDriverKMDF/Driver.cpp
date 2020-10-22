@@ -40,6 +40,64 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 	return status;
 }
 
+NTSTATUS KeyboardFilter_EvtDevicePrepareHardware(WDFDEVICE hDevice, WDFCMRESLIST ResourcesRaw, WDFCMRESLIST ResourcesTranslated) {
+	UNREFERENCED_PARAMETER(ResourcesRaw);
+	UNREFERENCED_PARAMETER(ResourcesTranslated);
+
+	KdPrint(("EvtDevicePrepareHardware"));
+	PDEVICE_EXTENSION filterExt = GetContextFromDevice(hDevice);
+
+	if (filterExt->UsbDevice != NULL) {
+		return STATUS_SUCCESS;
+	}
+
+	NTSTATUS status;
+	// Check if device is an USB device (so we can query for USB information used to identify the device more accurately, like Serial Number)
+	WCHAR enumeratorName[32];
+	ULONG enumeratorNameLength;
+	status = WdfDeviceQueryProperty(hDevice, DevicePropertyEnumeratorName, sizeof(enumeratorName), enumeratorName, &enumeratorNameLength);
+	if (!NT_SUCCESS(status)) {
+		KdPrint(("[KB] WdfDeviceQueryProperty[EnumeratorName] failed with status code 0x%x\n", status));
+		return status;
+	}
+
+	UNICODE_STRING enumeratorNameString, enumeratorNameUSB;
+
+	RtlInitUnicodeString(&enumeratorNameUSB, L"HID");
+	RtlInitUnicodeString(&enumeratorNameString, enumeratorName);
+
+	if (RtlCompareUnicodeString(&enumeratorNameString, &enumeratorNameUSB, TRUE) == 0) {
+
+		KdPrint(("[KB] Device is USB\n"));
+		// Device is USB
+
+		WDF_USB_DEVICE_CREATE_CONFIG UsbDeviceConfig;
+
+		// Create WDFUSBDEVICE object
+		WDF_USB_DEVICE_CREATE_CONFIG_INIT(&UsbDeviceConfig, USBD_CLIENT_CONTRACT_VERSION_602);
+
+		NTSTATUS UsbDeviceCreateStatus = WdfUsbTargetDeviceCreateWithParameters(hDevice, &UsbDeviceConfig, WDF_NO_OBJECT_ATTRIBUTES, &filterExt->UsbDevice);
+		if (!NT_SUCCESS(UsbDeviceCreateStatus)) {
+			KdPrint(("WdfUsbTargetDeviceCreateWithParameters failed with status 0x%x\n", UsbDeviceCreateStatus));
+
+			// If failed to create an USB Device, handle device as non-usb (PS/2)
+			filterExt->UsbDevice = NULL;
+		}
+
+	}
+	else {
+		KdPrint(("[KB] Device is not USB\n"));
+		filterExt->UsbDevice = NULL;
+	}
+
+	// URB urb;
+	// USB_DEVICE_DESCRIPTOR deviceDescriptor;
+
+	// UsbBuildGetDescriptorRequest(&urb, sizeof(urb), USB_DEVICE_DESCRIPTOR_TYPE, 0, 0, &deviceDescriptor, NULL, sizeof(USB_DEVICE_DESCRIPTOR), NULL);
+
+	return STATUS_SUCCESS;
+}
+
 /*++
 Routine Description:
 
@@ -84,6 +142,13 @@ NTSTATUS KeyboardFilter_EvtDeviceAdd(IN WDFDRIVER Driver, IN PWDFDEVICE_INIT Dev
 	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&deviceAttributes, DEVICE_EXTENSION);
 	deviceAttributes.EvtCleanupCallback = KeyboardFilter_OnKeyboardDisconnect;
 
+
+
+	WDF_PNPPOWER_EVENT_CALLBACKS pnpPowerCallbacks;
+	WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&pnpPowerCallbacks);
+	pnpPowerCallbacks.EvtDevicePrepareHardware = KeyboardFilter_EvtDevicePrepareHardware;
+	WdfDeviceInitSetPnpPowerEventCallbacks(DeviceInit, &pnpPowerCallbacks);
+
 	// Create a framework device object. This call will in turn create
 	// a WDM deviceobject, attach to the lower stack and set the
 	// appropriate flags and attributes.
@@ -98,38 +163,7 @@ NTSTATUS KeyboardFilter_EvtDeviceAdd(IN WDFDRIVER Driver, IN PWDFDEVICE_INIT Dev
 	filterExt = GetContextFromDevice(hDevice);
 	filterExt->WdfDevice = hDevice;
 
-	// Check if device is an USB device (so we can query for USB information used to identify the device more accurately, like Serial Number)
-	WCHAR enumeratorName[32];
-	ULONG enumeratorNameLength;
-	status = WdfDeviceQueryProperty(hDevice, DevicePropertyEnumeratorName, sizeof(enumeratorName), enumeratorName, &enumeratorNameLength);
-	if (!NT_SUCCESS(status)) {
-		KdPrint(("[KB] WdfDeviceQueryProperty[EnumeratorName] failed with status code 0x%x\n", status));
-		return status;
-	}
-	
-	UNICODE_STRING enumeratorNameString, enumeratorNameUSB;
-
-	RtlInitUnicodeString(&enumeratorNameUSB, L"HID");
-	RtlInitUnicodeString(&enumeratorNameString, enumeratorName);
-
-	if (RtlCompareUnicodeString(&enumeratorNameString, &enumeratorNameUSB, TRUE) == 0) {
-		// Device is USB
-
-		WDF_USB_DEVICE_CREATE_CONFIG UsbDeviceConfig;
-
-		// Create WDFUSBDEVICE object
-		WDF_USB_DEVICE_CREATE_CONFIG_INIT(&UsbDeviceConfig, USBD_CLIENT_CONTRACT_VERSION_602);
-
-		status = WdfUsbTargetDeviceCreateWithParameters(hDevice, &UsbDeviceConfig, WDF_NO_OBJECT_ATTRIBUTES, &filterExt->UsbDevice);
-		if (!NT_SUCCESS(status)) {
-			KdPrint(("WdfUsbTargetDeviceCreateWithParameters failed with status 0x%x\n", status));
-			return status;
-		}
-
-	}
-	else {
-		filterExt->UsbDevice = NULL;
-	}
+	filterExt->UsbDevice = NULL;
 
 	// Configure the default queue to be Parallel. Do not use sequential queue
 	// if this driver is going to be filtering PS2 ports because it can lead to
@@ -215,24 +249,6 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 
 		// Add device extension to our global keyboard manager
 		HASH_ADD(hh, _keyboards, DeviceID, sizeof(DWORD), devExt);
-
-		// Testing
-		{
-
-			KdPrint(("----------------------------\nDEVICE PROPERTIES\n----------------------------\n"));
-
-			for (int propIt = DevicePropertyDeviceDescription; propIt != DevicePropertyContainerID; propIt++) {
-				ULONG resultLength = 0;
-
-				DEVICE_REGISTRY_PROPERTY prop = static_cast<DEVICE_REGISTRY_PROPERTY>(propIt);
-				WdfDeviceQueryProperty(hDevice, prop, 0, NULL, &resultLength);
-
-				KdPrint(("Prop: %d; Length: %u\n", propIt, resultLength));
-			}
-
-			KdPrint(("----------------------------\nDEVICE PROPERTIES END\n----------------------------\n"));
-
-		}
 
 		break;
 	}
@@ -532,6 +548,24 @@ VOID KeyboardFilterRequestCompletionRoutine(WDFREQUEST Request, WDFIOTARGET Targ
 			KdPrint(("[KB] Cached KeyboardAttributes\n"));
 		}
 	}
+	else if (NT_SUCCESS(status) && CompletionParams->Type == WdfRequestTypeDeviceControlInternal && CompletionParams->Parameters.Ioctl.IoControlCode == IOCTL_HID_GET_SERIALNUMBER_STRING) {
+		size_t serialNumberLength = CompletionParams->Parameters.Ioctl.Output.Length;
+		KdPrint(("[KB] S/N length: %u\n", serialNumberLength));
+		PWCHAR serialNumber = reinterpret_cast<PWCHAR>(ExAllocatePoolWithTag(NonPagedPool, serialNumberLength, KBFLTR_KP_TAG));
+		NTSTATUS testStatus = WdfMemoryCopyToBuffer(buffer, CompletionParams->Parameters.Ioctl.Output.Offset, serialNumber, serialNumberLength);
+		
+		if (NT_SUCCESS(testStatus)) {
+			KdPrint(("[KB] S/N: %ws\n", serialNumber));
+		}
+		else {
+			KdPrint(("[KB] Failed to copy S/N buffer with status code: 0x%x\n", testStatus));
+		}
+
+		ExFreePoolWithTag(serialNumber, KBFLTR_KP_TAG);
+	}
+	else if (CompletionParams->Type == WdfRequestTypeDeviceControlInternal && CompletionParams->Parameters.Ioctl.IoControlCode == IOCTL_HID_GET_SERIALNUMBER_STRING) {
+		KdPrint(("[KB] Failed to get S/N with status code: 0x%x\n", status));
+	}
 
 	WdfRequestComplete(Request, status);
 
@@ -622,6 +656,105 @@ void KBFLTR_GetKeyboardsInfo(PCUSTOM_KEYBOARD_INFO buffer, size_t maxKeyboards, 
 
 		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyContainerID, sizeof(test), test, &dataLen);
 		KdPrint(("DevicePropertyContainerID  [%u]: %ws\n", dataLen, test));
+
+		// Device capabilities
+		{
+			WDFREQUEST Request;
+			WDF_REQUEST_SEND_OPTIONS options;
+			WDF_REQUEST_SEND_OPTIONS_INIT(&options, WDF_REQUEST_SEND_OPTION_SYNCHRONOUS);
+
+
+			WDFIOTARGET target = WdfDeviceGetIoTarget(s->WdfDevice);
+
+			NTSTATUS capStatus;
+			DEVICE_CAPABILITIES devCap;
+
+			RtlZeroMemory(&devCap, sizeof(DEVICE_CAPABILITIES));
+			devCap.Size = sizeof(DEVICE_CAPABILITIES);
+			devCap.Version = 1;
+			devCap.Address = (ULONG)-1;
+			devCap.UINumber = (ULONG)-1;
+
+			IO_STACK_LOCATION stack;
+
+			RtlZeroMemory(&stack, sizeof(stack));
+
+			stack.MajorFunction = IRP_MJ_PNP;
+			stack.MinorFunction = IRP_MN_QUERY_CAPABILITIES;
+			stack.Parameters.DeviceCapabilities.Capabilities = &devCap;
+
+			capStatus = WdfRequestCreate(WDF_NO_OBJECT_ATTRIBUTES, target, &Request);
+			if (NT_SUCCESS(capStatus)) {
+
+				WDF_REQUEST_REUSE_PARAMS reuse;
+				WDF_REQUEST_REUSE_PARAMS_INIT(&reuse, WDF_REQUEST_REUSE_NO_FLAGS, STATUS_NOT_SUPPORTED);
+
+				WdfRequestReuse(Request, &reuse);
+
+				WdfRequestWdmFormatUsingStackLocation(Request, &stack);
+
+				if (WdfRequestSend(Request, target, &options) == TRUE) {
+					capStatus = WdfRequestGetStatus(Request);
+					if (NT_SUCCESS(capStatus)) {
+						KdPrint(("dev_cap: Address %u, Removable: %u, SurpriseRemoval: %u, Unique ID: %u \n", devCap.Address, devCap.Removable, devCap.SurpriseRemovalOK, devCap.UniqueID));
+						KdPrint(("dev_cap: Address %u, Removable: %ws, SurpriseRemoval: %ws, Unique ID: %ws \n", devCap.Address, (devCap.Removable == TRUE ? L"TRUE" : L"FALSE"), (devCap.SurpriseRemovalOK == TRUE ? L"TRUE" : L"FALSE"), (devCap.UniqueID == TRUE ? L"TRUE" : L"FALSE")));
+					}
+					else {
+						KdPrint(("DEVICE_CAPABILITIES failed with error code 0x%x\n", capStatus));
+					}
+				}
+				else {
+					KdPrint(("DEVICE_CAPABILITIES WdfRequestSend fail\n"));
+				}
+			}
+
+			if (Request != NULL) {
+				WdfObjectDelete(Request);
+			}
+		}
+
+		// Instance id
+		{
+			WDFREQUEST Request;
+			WDF_REQUEST_SEND_OPTIONS options;
+			WDF_REQUEST_SEND_OPTIONS_INIT(&options, WDF_REQUEST_SEND_OPTION_SYNCHRONOUS);
+
+			WDFIOTARGET target = WdfDeviceGetIoTarget(s->WdfDevice);
+
+			NTSTATUS instStatus;
+
+			IO_STACK_LOCATION stack;
+			RtlZeroMemory(&stack, sizeof(stack));
+
+			stack.MajorFunction = IRP_MJ_PNP;
+			stack.MinorFunction = IRP_MN_QUERY_ID;
+			stack.Parameters.QueryId.IdType = BusQueryInstanceID;
+
+			instStatus = WdfRequestCreate(WDF_NO_OBJECT_ATTRIBUTES, target, &Request);
+			if (NT_SUCCESS(instStatus)) {
+
+				WDF_REQUEST_REUSE_PARAMS reuse;
+				WDF_REQUEST_REUSE_PARAMS_INIT(&reuse, WDF_REQUEST_REUSE_NO_FLAGS, STATUS_NOT_SUPPORTED);
+
+				WdfRequestReuse(Request, &reuse);
+
+				WdfRequestWdmFormatUsingStackLocation(Request, &stack);
+
+				if (WdfRequestSend(Request, target, &options) == TRUE) {
+					instStatus = WdfRequestGetStatus(Request);
+					if (NT_SUCCESS(instStatus)) {
+						KdPrint(("Instance id: \n"));
+					}
+					else {
+						KdPrint(("instanceid failed with status 0x%x\n", instStatus));
+					}
+				}
+				else {
+					KdPrint(("INstanceID WdfRequestSend failed\n"));
+				}
+
+			}
+		}
 
 		//NTSTATUS testStatus = WdfUsbTargetDeviceQueryString(s->WdfDevice, )
 		

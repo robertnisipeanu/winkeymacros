@@ -23,6 +23,8 @@
 #include <usbdi.h>
 #include <usbdlib.h>
 #include <wdfusb.h>
+#include <hidclass.h>
+
 
 #define NTRSTRSAFE_LIB
 #include <ntstrsafe.h>
@@ -100,4 +102,5 @@ extern "C" {
 	EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL KeyboardFilter_EvtIoInternalDeviceControl;
 	EVT_WDF_REQUEST_COMPLETION_ROUTINE KeyboardFilterRequestCompletionRoutine;
 	EVT_WDF_OBJECT_CONTEXT_CLEANUP KeyboardFilter_OnKeyboardDisconnect;
+	EVT_WDF_DEVICE_PREPARE_HARDWARE KeyboardFilter_EvtDevicePrepareHardware;
 }
