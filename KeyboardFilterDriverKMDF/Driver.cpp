@@ -729,7 +729,9 @@ void KBFLTR_GetKeyboardsInfo(PCUSTOM_KEYBOARD_INFO buffer, size_t maxKeyboards, 
 						WDF_REQUEST_COMPLETION_PARAMS_INIT(&completionParams);
 						WdfRequestGetCompletionParams(Request, &completionParams);
 
-						KdPrint(("Instance get status: 0x%x, Instance id: %ws\n", completionParams.IoStatus.Status, completionParams.IoStatus.Information));
+						PWCHAR stringResult = reinterpret_cast<PWCHAR>(completionParams.IoStatus.Information);
+
+						KdPrint(("Instance get status: 0x%x, Instance id: %ws\n", completionParams.IoStatus.Status, stringResult));
 					}
 					else {
 						KdPrint(("instanceid failed with status 0x%x\n", instStatus));
