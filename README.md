@@ -4,4 +4,4 @@ Currently, the driver is almost finished and can be found inside `KeyboardFilter
 
 Current project goals:
 - Build an UI app to manage macros
-- Find a signer for the driver (Windows requires signing drivers with an EV certificate, which can only bought by a business and costs a lot of money)
+- Find a signer for the driver (Microsoft requires signing drivers for Win10 with an EV certificate, which can only bought by a business and costs a lot of money and which, unfortunately, could kill this project)
