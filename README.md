@@ -13,3 +13,9 @@ For more information of how the driver works, check the README.md from the [driv
 Current project goals:
 - Build an UI app to manage macros
 - Find a signer for the driver (Microsoft requires signing drivers for Win10 with an EV certificate, which can only bought by a business and costs a lot of money and which, unfortunately, could kill this project)
+
+Current project barrier:
+- Microsoft requires all drivers to be signed using an "EV Certificate". EV Certificates can only be obtained by companies and they cost quite some money (some of them go for more than 500$/year) and because of this, hobby driver development is discouraged by Microsoft. Unfortunately, I'll have to stop development for this package (driver and the app) as there is no way for me to put my hands on an EV certificate and be able to release the package for public use. This may change however, when and if Microsoft decides to allow hobby driver developers to get their hands on a certificate and publish drivers.
+
+## License
+The package is launched under [LGPLv2.1](LICENSE) License, which means you are free to distribute the driver with your own application as long as you do not make any modification on the driver's source code itself. If custom licensing is required, feel free to contact me and we can discuss it.
