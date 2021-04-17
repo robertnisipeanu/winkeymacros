@@ -61,12 +61,6 @@ extern "C" {
     typedef struct _CUSTOM_KEYBOARD_INFO {
 
         //
-        // Specifies the unit number of a keyboard device.
-        // It's the N in '\Device\KeyboardPortN'
-        //
-        USHORT UnitId;
-
-        //
         // The DeviceID is allocated by our driver (auto-incremented with each device created(keyboard plugged)).
         // It's supposed to be an unique identifier of a keyboard between the library and the driver so we won't
         // have to pass strings (eg. HID) between them for every input. The app can cache the HID associated

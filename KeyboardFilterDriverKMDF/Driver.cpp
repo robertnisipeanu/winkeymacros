@@ -258,6 +258,7 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 		status = STATUS_NOT_IMPLEMENTED;
 		break;
 	}
+	// Capture information about the device (attributes and typematic)
 	case IOCTL_KEYBOARD_QUERY_ATTRIBUTES:
 	{
 		forwardWithCompletionRoutine = TRUE;
@@ -268,9 +269,9 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 	// the stack. These queries must be successful for the RIT to communicate
 	// with the keyboard.
 	case IOCTL_KEYBOARD_QUERY_INDICATOR_TRANSLATION:
+	case IOCTL_KEYBOARD_QUERY_TYPEMATIC:
 	case IOCTL_KEYBOARD_QUERY_INDICATORS:
 	case IOCTL_KEYBOARD_SET_INDICATORS:
-	case IOCTL_KEYBOARD_QUERY_TYPEMATIC:
 	case IOCTL_KEYBOARD_SET_TYPEMATIC:
 		break;
 	}
@@ -288,14 +289,15 @@ VOID KeyboardFilter_EvtIoInternalDeviceControl(IN WDFQUEUE Queue, IN WDFREQUEST 
 		// Format the request with the output memory so the completion routine
 		// can access the return data in order to cache it into the context area
 		status = WdfRequestRetrieveOutputMemory(Request, &outputMemory);
-
+		
 		if (!NT_SUCCESS(status)) {
 			KdPrint(("[KB] WdfRequestRetrieveOutputMemory failed with error code: 0x%x\n", status));
 			WdfRequestComplete(Request, status);
 			return;
 		}
 
-		status = WdfIoTargetFormatRequestForInternalIoctl(WdfDeviceGetIoTarget(hDevice), Request, IoControlCode, NULL, NULL, outputMemory, NULL);
+		status = WdfIoTargetFormatRequestForInternalIoctl(WdfDeviceGetIoTarget(hDevice), Request, 
+			IoControlCode, NULL, NULL, outputMemory, NULL);
 
 		if (!NT_SUCCESS(status)) {
 			KdPrint(("[KB] WdfIoTargetFormatRequestForInternalIoctl failed: 0x%x\n", status));
@@ -438,7 +440,6 @@ VOID KeyboardFilter_ServiceCallback(IN PDEVICE_OBJECT DeviceObject, IN PKEYBOARD
 
 		// Create KEYBOARD_INPUT_DATA objects that we can pass down the stack
 		for (int i = 0; i < macro->NewKeysLength; i++) {
-			MacroData[i].UnitId = pCur->UnitId;
 			MacroData[i].Reserved = pCur->Reserved;
 			MacroData[i].ExtraInformation = pCur->ExtraInformation;
 			MacroData[i].MakeCode = macro->NewKeys[i].MakeCode;
@@ -542,10 +543,15 @@ VOID KeyboardFilterRequestCompletionRoutine(WDFREQUEST Request, WDFIOTARGET Targ
 	// Save the keyboard attributes in our context area
 	// so that we can return them to the app later
 
-	if (NT_SUCCESS(status) && CompletionParams->Type == WdfRequestTypeDeviceControlInternal && CompletionParams->Parameters.Ioctl.IoControlCode == IOCTL_KEYBOARD_QUERY_ATTRIBUTES) {
-		if (CompletionParams->Parameters.Ioctl.Output.Length >= sizeof(KEYBOARD_ATTRIBUTES)) {
-			status = WdfMemoryCopyToBuffer(buffer, CompletionParams->Parameters.Ioctl.Output.Offset, &devExt->KeyboardAttributes, sizeof(KEYBOARD_ATTRIBUTES));
-			KdPrint(("[KB] Cached KeyboardAttributes\n"));
+	KdPrint(("[KB] CompletionRoutine IOCTL: %u; Status: 0x%x; Type: 0x%x; Offset: %zu\n", 
+		CompletionParams->Parameters.Ioctl.IoControlCode, status, CompletionParams->Type, CompletionParams->Parameters.Ioctl.Input.Offset));
+
+	if (NT_SUCCESS(status) && CompletionParams->Type == WdfRequestTypeDeviceControlInternal){
+		if (CompletionParams->Parameters.Ioctl.IoControlCode == IOCTL_KEYBOARD_QUERY_ATTRIBUTES) {
+			if (CompletionParams->Parameters.Ioctl.Output.Length >= sizeof(KEYBOARD_ATTRIBUTES)) {
+				status = WdfMemoryCopyToBuffer(buffer, CompletionParams->Parameters.Ioctl.Output.Offset, &devExt->KeyboardAttributes, sizeof(KEYBOARD_ATTRIBUTES));
+				KdPrint(("[KB] Cached KeyboardAttributes\n"));
+			}
 		}
 	}
 
@@ -612,140 +618,18 @@ void KBFLTR_GetKeyboardsInfo(PCUSTOM_KEYBOARD_INFO buffer, size_t maxKeyboards, 
 		CUSTOM_KEYBOARD_INFO sInfo;
 
 		sInfo.DeviceID = s->DeviceID;
+		sInfo.KeyboardMode = s->KeyboardAttributes.KeyboardMode;
 		sInfo.NumberOfFunctionKeys = s->KeyboardAttributes.NumberOfFunctionKeys;
 		sInfo.NumberOfIndicators = s->KeyboardAttributes.NumberOfIndicators;
 		sInfo.NumberOfKeysTotal = s->KeyboardAttributes.NumberOfKeysTotal;
-
-		KdPrint(("\n\n"));
+		
 		// Get device hardware ID
 		ULONG dataLen;
-		WCHAR test[256];
 
 		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyHardwareID, sizeof(sInfo.HID), sInfo.HID, &dataLen);
 		KdPrint(("HardwareID[%u]: %ws\n", dataLen, sInfo.HID));
 
-		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyDeviceDescription, sizeof(test), test, &dataLen);
-		KdPrint(("DeviceDescription[%u]: %ws\n", dataLen, test));
 
-		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyManufacturer, sizeof(test), test, &dataLen);
-		KdPrint(("DevicePropertyManufacturer[%u]: %ws\n", dataLen, test));
-
-		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyFriendlyName, sizeof(test), test, &dataLen);
-		KdPrint(("DevicePropertyFriendlyName[%u]: %ws\n", dataLen, test));
-
-		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyEnumeratorName, sizeof(test), test, &dataLen);
-		KdPrint(("DevicePropertyEnumeratorName [%u]: %ws\n", dataLen, test));
-
-		WdfDeviceQueryProperty(s->WdfDevice, DevicePropertyContainerID, sizeof(test), test, &dataLen);
-		KdPrint(("DevicePropertyContainerID  [%u]: %ws\n", dataLen, test));
-
-		// Device capabilities
-		{
-			WDFREQUEST Request;
-			WDF_REQUEST_SEND_OPTIONS options;
-			WDF_REQUEST_SEND_OPTIONS_INIT(&options, WDF_REQUEST_SEND_OPTION_SYNCHRONOUS);
-
-
-			WDFIOTARGET target = WdfDeviceGetIoTarget(s->WdfDevice);
-
-			NTSTATUS capStatus;
-			DEVICE_CAPABILITIES devCap;
-
-			RtlZeroMemory(&devCap, sizeof(DEVICE_CAPABILITIES));
-			devCap.Size = sizeof(DEVICE_CAPABILITIES);
-			devCap.Version = 1;
-			devCap.Address = (ULONG)-1;
-			devCap.UINumber = (ULONG)-1;
-
-			IO_STACK_LOCATION stack;
-
-			RtlZeroMemory(&stack, sizeof(stack));
-
-			stack.MajorFunction = IRP_MJ_PNP;
-			stack.MinorFunction = IRP_MN_QUERY_CAPABILITIES;
-			stack.Parameters.DeviceCapabilities.Capabilities = &devCap;
-
-			capStatus = WdfRequestCreate(WDF_NO_OBJECT_ATTRIBUTES, target, &Request);
-			if (NT_SUCCESS(capStatus)) {
-
-				WDF_REQUEST_REUSE_PARAMS reuse;
-				WDF_REQUEST_REUSE_PARAMS_INIT(&reuse, WDF_REQUEST_REUSE_NO_FLAGS, STATUS_NOT_SUPPORTED);
-
-				WdfRequestReuse(Request, &reuse);
-
-				WdfRequestWdmFormatUsingStackLocation(Request, &stack);
-
-				if (WdfRequestSend(Request, target, &options) == TRUE) {
-					capStatus = WdfRequestGetStatus(Request);
-					if (NT_SUCCESS(capStatus)) {
-						KdPrint(("dev_cap: Address %u, Removable: %u, SurpriseRemoval: %u, Unique ID: %u \n", devCap.Address, devCap.Removable, devCap.SurpriseRemovalOK, devCap.UniqueID));
-						KdPrint(("dev_cap: Address %u, Removable: %ws, SurpriseRemoval: %ws, Unique ID: %ws \n", devCap.Address, (devCap.Removable == TRUE ? L"TRUE" : L"FALSE"), (devCap.SurpriseRemovalOK == TRUE ? L"TRUE" : L"FALSE"), (devCap.UniqueID == TRUE ? L"TRUE" : L"FALSE")));
-					}
-					else {
-						KdPrint(("DEVICE_CAPABILITIES failed with error code 0x%x\n", capStatus));
-					}
-				}
-				else {
-					KdPrint(("DEVICE_CAPABILITIES WdfRequestSend fail\n"));
-				}
-			}
-
-			if (Request != NULL) {
-				WdfObjectDelete(Request);
-			}
-		}
-
-		// Instance id
-		{
-			WDFREQUEST Request;
-			WDF_REQUEST_SEND_OPTIONS options;
-			WDF_REQUEST_SEND_OPTIONS_INIT(&options, WDF_REQUEST_SEND_OPTION_SYNCHRONOUS);
-
-			WDFIOTARGET target = WdfDeviceGetIoTarget(s->WdfDevice);
-
-			NTSTATUS instStatus;
-
-			IO_STACK_LOCATION stack;
-			RtlZeroMemory(&stack, sizeof(stack));
-
-			stack.MajorFunction = IRP_MJ_PNP;
-			stack.MinorFunction = IRP_MN_QUERY_ID;
-			stack.Parameters.QueryId.IdType = BusQueryInstanceID;
-
-			instStatus = WdfRequestCreate(WDF_NO_OBJECT_ATTRIBUTES, target, &Request);
-			if (NT_SUCCESS(instStatus)) {
-
-				WDF_REQUEST_REUSE_PARAMS reuse;
-				WDF_REQUEST_REUSE_PARAMS_INIT(&reuse, WDF_REQUEST_REUSE_NO_FLAGS, STATUS_NOT_SUPPORTED);
-
-				WdfRequestReuse(Request, &reuse);
-
-				WdfRequestWdmFormatUsingStackLocation(Request, &stack);
-
-				if (WdfRequestSend(Request, target, &options) == TRUE) {
-					instStatus = WdfRequestGetStatus(Request);
-					if (NT_SUCCESS(instStatus)) {
-						WDF_REQUEST_COMPLETION_PARAMS completionParams;
-						WDF_REQUEST_COMPLETION_PARAMS_INIT(&completionParams);
-						WdfRequestGetCompletionParams(Request, &completionParams);
-
-						PWCHAR stringResult = reinterpret_cast<PWCHAR>(completionParams.IoStatus.Information);
-
-						KdPrint(("Instance get status: 0x%x, Instance id: %ws\n", completionParams.IoStatus.Status, stringResult));
-					}
-					else {
-						KdPrint(("instanceid failed with status 0x%x\n", instStatus));
-					}
-				}
-				else {
-					KdPrint(("INstanceID WdfRequestSend failed\n"));
-				}
-
-			}
-		}
-
-		//NTSTATUS testStatus = WdfUsbTargetDeviceQueryString(s->WdfDevice, )
-		
 		// Copy the current keyboard info item into buffer
 		RtlCopyMemory(buffer + *keyboardsNumberOutput, &sInfo, sizeof(CUSTOM_KEYBOARD_INFO));
 

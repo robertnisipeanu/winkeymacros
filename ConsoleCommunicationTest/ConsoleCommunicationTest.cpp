@@ -26,7 +26,7 @@ int main() {
     }
 
 
-    std::cout << "Number of keybords: " << numOfKeyb << std::endl;
+    std::cout << "Number of keyboards: " << numOfKeyb << std::endl;
 
     PCUSTOM_KEYBOARD_INFO keybInfos = reinterpret_cast<PCUSTOM_KEYBOARD_INFO>(malloc(numOfKeyb * sizeof(CUSTOM_KEYBOARD_INFO)));
 
